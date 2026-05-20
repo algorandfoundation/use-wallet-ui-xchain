@@ -18,7 +18,7 @@ export function useAssetRegistry(): UseAssetRegistryReturn {
 
   const indexerClient = useMemo(() => {
     if (activeNetwork === 'localnet') return new algosdk.Indexer(LOCALNET_TOKEN, 'http://localhost', 8980)
-    if (activeNetwork === 'testnet') return new algosdk.Indexer('', 'https://testnet-idx.4160.nodely.dev')
+    if (activeNetwork === 'testnet') return new algosdk.Indexer('', 'https://testnet-idx.4160.nodely.dev', '')
     return undefined
   }, [activeNetwork])
 
