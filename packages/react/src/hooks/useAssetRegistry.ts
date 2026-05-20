@@ -1,4 +1,4 @@
-import { useNetwork, useWallet } from '@txnlab/use-wallet-react'
+import { useNetwork, useWallet, NetworkId } from '@txnlab/use-wallet-react'
 import { useAssetRegistry as useAssetRegistryCore, type UseAssetRegistryReturn } from '@d13co/algo-x-evm-ui'
 import algosdk from 'algosdk'
 import { useMemo } from 'react'
@@ -17,8 +17,8 @@ export function useAssetRegistry(): UseAssetRegistryReturn {
   const { activeNetwork } = useNetwork()
 
   const indexerClient = useMemo(() => {
-    if (activeNetwork === 'localnet') return new algosdk.Indexer(LOCALNET_TOKEN, 'http://localhost', 8980)
-    if (activeNetwork === 'testnet') return new algosdk.Indexer('', 'https://testnet-idx.4160.nodely.dev', '')
+    if (activeNetwork === NetworkId.LOCALNET) return new algosdk.Indexer(LOCALNET_TOKEN, 'http://localhost', 8980)
+    if (activeNetwork === NetworkId.TESTNET) return new algosdk.Indexer('', 'https://testnet-idx.4160.nodely.dev', '')
     return undefined
   }, [activeNetwork])
 
