@@ -23,9 +23,10 @@ export function usePeraAssetData(
   const prevKeyRef = useRef('')
 
   const network = activeNetwork === 'testnet' ? 'testnet' : 'mainnet'
+  const isMainnetOrTestnet = activeNetwork === 'mainnet' || activeNetwork === 'testnet'
 
   useEffect(() => {
-    if (assetIds.length === 0) return
+    if (!isMainnetOrTestnet || assetIds.length === 0) return
 
     // Dedupe: don't re-fetch if same set of IDs
     const key = assetIds.slice().sort((a, b) => a - b).join(',')
@@ -49,10 +50,11 @@ export function usePeraAssetData(
     return () => {
       cancelled = true
     }
-  }, [assetIds, network])
+  }, [assetIds, network, isMainnetOrTestnet])
 
   const fetchFor = useCallback(
     async (ids: number[]): Promise<Map<number, PeraAssetData>> => {
+      if (!isMainnetOrTestnet) return new Map()
       const result = await fetchPeraAssets(ids, network)
       setPeraData((prev) => {
         const next = new Map(prev)
@@ -61,7 +63,7 @@ export function usePeraAssetData(
       })
       return result
     },
-    [network],
+    [isMainnetOrTestnet, network],
   )
 
   return { peraData, loading, fetchFor }
