@@ -219,6 +219,41 @@ function getErrorMessage(err: unknown): string {
   return 'Bridge failed'
 }
 
+// If Allbridge transfer status is available, use it as the source of truth.
+// If not, build a synthetic status object from local data, so we can 
+// display best-effort transfer progress.
+function resolveTransferStatus({
+  allbridge,
+  localSendConfirmations,
+  sourceIsAlgorand,
+  sourceConfirmationsNeeded,
+}: {
+  allbridge: TransferStatusResponse | null
+  localSendConfirmations: number
+  sourceIsAlgorand: boolean
+  sourceConfirmationsNeeded: number | null
+}): BridgeTransferStatus | null {
+  if (allbridge) {
+    return {
+      send: {
+        // Take the higher send confirmation count so the display never goes backwards.
+        confirmations: Math.max(allbridge.send?.confirmations ?? 0, localSendConfirmations),
+        confirmationsNeeded: sourceIsAlgorand ? 1 : (allbridge.send?.confirmationsNeeded ?? sourceConfirmationsNeeded ?? 0),
+      },
+      signaturesCount: allbridge.signaturesCount,
+      signaturesNeeded: allbridge.signaturesNeeded,
+      receive: allbridge.receive ?? null,
+    }
+  }
+  if (sourceIsAlgorand) {
+    return { send: { confirmations: localSendConfirmations, confirmationsNeeded: 1 }, signaturesCount: 0, signaturesNeeded: 0, receive: null }
+  }
+  if (localSendConfirmations > 0 && sourceConfirmationsNeeded != null) {
+    return { send: { confirmations: localSendConfirmations, confirmationsNeeded: sourceConfirmationsNeeded }, signaturesCount: 0, signaturesNeeded: 0, receive: null }
+  }
+  return null
+}
+
 // Map Allbridge chain symbols to their native currency ticker for fee display
 export function useBridgePanel(wallet: BridgeWalletAdapter, options: UseBridgeOptions = {}): UseBridgePanelReturn {
   const { activeAddress, algodClient, signTransactions, onTransactionSuccess, evmAddress, isAlgoXEvm, getEvmProvider } = wallet
@@ -1287,16 +1322,15 @@ export function useBridgePanel(wallet: BridgeWalletAdapter, options: UseBridgeOp
       const { txid } = await algodClient.sendRawTransaction(signedBytes).do()
       // Wait for initial confirmation using whichever txid we have
       const confirmTxId = appCallTxId ?? txid
-      await algosdk.waitForConfirmation(algodClient, confirmTxId, 4)
 
       // Use the app call txid for status tracking (Allbridge expects it)
       setSourceTxId(confirmTxId)
-
-      // Algorand has instant finality — 1 confirmation is sufficient.
-      setLocalSendConfirmations(1)
-
       setStatus('waiting')
       setWaitingSince(Date.now())
+
+      await algosdk.waitForConfirmation(algodClient, confirmTxId, 4)
+      // Algorand has instant finality — 1 confirmation is sufficient.
+      setLocalSendConfirmations(1)
 
       // Transfer status polling takes over via the useEffect above
     } catch (err) {
@@ -1718,33 +1752,12 @@ export function useBridgePanel(wallet: BridgeWalletAdapter, options: UseBridgeOp
     algorandAddress,
     estimatedTimeMs,
     waitingSince,
-    transferStatus: transferStatus
-      ? {
-          send: {
-            confirmations: Math.max(transferStatus.send?.confirmations ?? 0, localSendConfirmations),
-            confirmationsNeeded: sourceIsAlgorand ? 1 : (transferStatus.send?.confirmationsNeeded ?? sourceConfirmationsNeeded ?? 0),
-          },
-          signaturesCount: transferStatus.signaturesCount,
-          signaturesNeeded: transferStatus.signaturesNeeded,
-          receive: transferStatus.receive
-            ? {
-                confirmations: transferStatus.receive.confirmations,
-                confirmationsNeeded: transferStatus.receive.confirmationsNeeded,
-                txId: transferStatus.receive.txId,
-              }
-            : null,
-        }
-      : localSendConfirmations > 0 && sourceConfirmationsNeeded != null
-        ? {
-            send: {
-              confirmations: localSendConfirmations,
-              confirmationsNeeded: sourceIsAlgorand ? 1 : sourceConfirmationsNeeded,
-            },
-            signaturesCount: 0,
-            signaturesNeeded: 0,
-            receive: null,
-          }
-        : null,
+    transferStatus: resolveTransferStatus({
+      allbridge: transferStatus,
+      localSendConfirmations,
+      sourceIsAlgorand,
+      sourceConfirmationsNeeded,
+    }),
     optInNeeded,
     optInSigned,
     watchingForFunding,
