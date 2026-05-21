@@ -589,6 +589,7 @@ export function useBridgePanel(wallet: BridgeWalletAdapter, options: UseBridgeOp
     if (!sdk || !src || !dst) {
       setGasFee(null)
       extraGasRef.current = null
+      stablecoinFeeRef.current = null
       setExtraGasAmount(null)
       setExtraGasAlgo(null)
       return
@@ -600,7 +601,7 @@ export function useBridgePanel(wallet: BridgeWalletAdapter, options: UseBridgeOp
       try {
         const { Messenger, FeePaymentMethod } = await import('@allbridge/bridge-core-sdk')
 
-        // Fetch bridge gas fees (both native and stablecoin options)
+        // Fetch bridge gas fees
         const fees = await getGasFees(sdk, src, dst, Messenger.ALLBRIDGE)
         if (cancelled) return
         const stableFee = fees[FeePaymentMethod.WITH_STABLECOIN]
@@ -717,9 +718,9 @@ export function useBridgePanel(wallet: BridgeWalletAdapter, options: UseBridgeOp
   }, [enabled, resolveSourceSdkToken, resolveDestSdkToken])
 
   // -- Debounced quote calculation --
-  // Fees are inclusive: the user's input is the total they spend. In stablecoin mode
-  // the SDK deducts fee + extra gas from the amount, so the quote must reflect the
-  // net amount that actually gets bridged: amount - gasFee - extraGas.
+  // Fees are inclusive: the user's input is the total they spend. With stablecoin
+  // fee, the SDK deducts fee + extra gas from the amount, so the quote must reflect
+  // the net amount that actually gets bridged: amount - gasFee - extraGas.
 
   useEffect(() => {
     const sdk = sdkRef.current
@@ -742,7 +743,7 @@ export function useBridgePanel(wallet: BridgeWalletAdapter, options: UseBridgeOp
 
     // Fees are inclusive: always subtract stablecoin fee + extra gas from the
     // input so the quote reflects what the user actually receives.
-    // Assumes gasFee is always in source token units (stablecoin fee path).
+    // Assumes gasFee is always in source token units.
     let quoteAmount = amount
     if (gasFee) {
       const extra = extraGasAmount ? parseFloat(extraGasAmount) : 0
@@ -1233,22 +1234,16 @@ export function useBridgePanel(wallet: BridgeWalletAdapter, options: UseBridgeOp
 
       // Build send params — Algorand has no token approval, no extra gas for ALG→EVM
       const stableFee = stablecoinFeeRef.current
-      const useStablecoin = !!stableFee
+      if (!stableFee) throw new Error("Stablecoin fee missing from SDK response, can't proceed with fee calculation")
       const sendParams = {
+        gasFeePaymentMethod: FeePaymentMethod.WITH_STABLECOIN,
+        fee: stableFee.int,
         amount,
         fromAccountAddress: algorandAddress,
         toAccountAddress: evmAddress,
         sourceToken: srcSdkToken,
         destinationToken: dstSdkToken,
         messenger: Messenger.ALLBRIDGE,
-        ...(useStablecoin
-          ? {
-              gasFeePaymentMethod: FeePaymentMethod.WITH_STABLECOIN,
-              fee: stableFee.int,
-            }
-          : {
-              gasFeePaymentMethod: FeePaymentMethod.WITH_NATIVE_CURRENCY,
-            }),
       }
 
       console.log('[Allbridge] ALG sendParams', JSON.stringify(sendParams, null, 2))
@@ -1393,7 +1388,7 @@ export function useBridgePanel(wallet: BridgeWalletAdapter, options: UseBridgeOp
       // 5. Fees are inclusive: the user's input amount is the total they spend.
       //    In stablecoin mode the SDK deducts fee + extra gas from this amount.
       const stableFee = stablecoinFeeRef.current
-      const useStablecoin = !!stableFee
+      if (!stableFee) throw new Error("Stablecoin fee missing from SDK response, can't proceed with fee calculation")
       const bridgeAmount = amount
 
       // 5b. Pre-flight: check if wallet supports wallet_sendCalls on this chain.
@@ -1497,21 +1492,15 @@ export function useBridgePanel(wallet: BridgeWalletAdapter, options: UseBridgeOp
 
       // 7. Build bridge transaction
       const sendParams = {
+        gasFeePaymentMethod: FeePaymentMethod.WITH_STABLECOIN,
+        fee: stableFee.int,
+        ...(extraGas ? { extraGas, extraGasFormat: AmountFormat.FLOAT } : {}),
         amount: bridgeAmount,
         fromAccountAddress: evmAddress,
         toAccountAddress: algorandAddress,
         sourceToken: srcSdkToken,
         destinationToken: dstSdkToken,
         messenger: Messenger.ALLBRIDGE,
-        ...(useStablecoin
-          ? {
-              gasFeePaymentMethod: FeePaymentMethod.WITH_STABLECOIN,
-              fee: stableFee.int,
-              ...(extraGas ? { extraGas, extraGasFormat: AmountFormat.FLOAT } : {}),
-            }
-          : {
-              gasFeePaymentMethod: FeePaymentMethod.WITH_NATIVE_CURRENCY,
-            }),
       }
 
       console.log('[Allbridge] EVM sendParams', JSON.stringify(sendParams, null, 2))
