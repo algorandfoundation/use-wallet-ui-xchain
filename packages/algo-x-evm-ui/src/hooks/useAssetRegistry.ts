@@ -23,6 +23,10 @@ export interface UseAssetRegistryReturn {
   searchByName: (query: string, limit?: number) => Promise<CachedAsset[]>
 }
 
+/**
+ * @param indexerClient Optional indexer client - pass it to support
+ * testnet/localnet asset lookup. Not needed for only-mainnet usage.
+ */
 export function useAssetRegistry(
   algodClient: algosdk.Algodv2 | null | undefined,
   activeNetwork: string | undefined,
