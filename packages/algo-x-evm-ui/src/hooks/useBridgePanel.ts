@@ -674,7 +674,8 @@ export function useBridgePanel(wallet: BridgeWalletAdapter, options: UseBridgeOp
                 // Extra gas in stablecoin terms (≈ USD for USDC/USDT).
                 // Cap precision to 8 decimal places to avoid BigInt encoding errors.
                 const raw = Math.min(MAX_EXTRA_GAS_USD, maxFloat)
-                extraGasFloat = raw.toFixed(8)
+                // Truncate, if round up can produce an integer that exceeds the API's limit.
+                extraGasFloat = (Math.floor(raw * 1e8) / 1e8).toFixed(8)
 
                 // Estimate ALGO received: proportion of max dest gas based on our request.
                 // For zero-balance accounts, add 0.2 ALGO that Allbridge sends to bootstrap
