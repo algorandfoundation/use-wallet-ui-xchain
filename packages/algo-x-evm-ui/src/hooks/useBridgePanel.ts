@@ -1170,7 +1170,7 @@ export function useBridgePanel(wallet: BridgeWalletAdapter, options: UseBridgeOp
       if (!/already in ledger/i.test(msg)) throw err
       console.log('[useBridgePanel] opt-in already in ledger (submitted by DFX)')
     }
-    await algosdk.waitForConfirmation(algodClient, optInTxIdRef.current, 4)
+    await algosdk.waitForConfirmation(algodClient, optInTxIdRef.current, 8)
     setOptInConfirmed(true)
     onTransactionSuccess?.()
   }
@@ -1329,7 +1329,7 @@ export function useBridgePanel(wallet: BridgeWalletAdapter, options: UseBridgeOp
       setStatus('waiting')
       setWaitingSince(Date.now())
 
-      await algosdk.waitForConfirmation(algodClient, confirmTxId, 4)
+      await algosdk.waitForConfirmation(algodClient, confirmTxId, 8)
       // Algorand has instant finality — 1 confirmation is sufficient.
       setLocalSendConfirmations(1)
 
