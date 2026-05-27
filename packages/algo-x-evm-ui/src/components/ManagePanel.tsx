@@ -520,7 +520,7 @@ export function ManagePanel({
           }
           .wui-asset-send-icon { width: 0.75rem !important; height: 0.75rem !important; }
           .wui-asset-send-label { display: inline !important; }
-          .wui-panel-wide > :first-child { display: none !important; }
+          .wui-panel-wide .wui-panel-back { display: none !important; }
         }
       `}</style>
       <div style={{ containerName: 'wui-manage', containerType: 'inline-size' }}>

@@ -103,6 +103,22 @@ export async function getTransferStatus(
 /** Map keyed by `"chainSymbol:tokenSymbol"` → raw balance in smallest units */
 export type TokenBalanceMap = Record<string, bigint>
 
+/** Per EVM address balance cache to avoid redundant RPC calls when switching 
+ * between accounts. Cleared on wallet disconnect or manually via `refreshBalances`. */
+const evmBalanceCache = new Map<string, TokenBalanceMap>()
+
+export function getEvmBalanceCache(address: string): TokenBalanceMap | null {
+  return evmBalanceCache.get(address.toLowerCase()) ?? null
+}
+
+export function setEvmBalanceCache(address: string, balances: TokenBalanceMap): void {
+  evmBalanceCache.set(address.toLowerCase(), balances)
+}
+
+export function clearAllEvmBalanceCaches(): void {
+  evmBalanceCache.clear()
+}
+
 // ERC-20 balanceOf selector: keccak256("balanceOf(address)") first 4 bytes
 const BALANCE_OF_SELECTOR = '0x70a08231'
 

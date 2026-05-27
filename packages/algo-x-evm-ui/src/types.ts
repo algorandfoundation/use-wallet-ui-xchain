@@ -110,11 +110,17 @@ export interface AssetSearchProvider {
 import type { EIP1193Provider } from './services/evmProviderAdapter'
 
 /**
- * Extended wallet adapter for bridge operations.
- * Adds EVM-specific fields needed for cross-chain bridging.
+ * Extends `WalletAdapter` with EVM-specific fields and Algorand
+ * account info needed for cross-chain bridge operations.
  */
 export interface BridgeWalletAdapter extends WalletAdapter {
   evmAddress: string | null
   isAlgoXEvm: boolean
   getEvmProvider?: () => Promise<EIP1193Provider>
+  /** Algorand account data. If `algorandAccountInfoFetched` is true, can still be null if the account is non-existent. */
+  algorandAccountInfo?: algosdk.modelsv2.Account | null
+  /** True once the account info has resolved at least once (success or error). */
+  algorandAccountInfoFetched?: boolean
+  /** Called when the user triggers a manual balance refresh. */
+  onRefreshAlgorandBalance?: () => unknown
 }
