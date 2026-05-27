@@ -118,7 +118,7 @@ export function useReceivePanel(
       setStatus('sending')
       const id = txn.txID()
       await algodClient.sendRawTransaction(signedTxn).do()
-      await algosdk.waitForConfirmation(algodClient, id, 4)
+      await algosdk.waitForConfirmation(algodClient, id, 8)
 
       onTransactionSuccess?.()
 
