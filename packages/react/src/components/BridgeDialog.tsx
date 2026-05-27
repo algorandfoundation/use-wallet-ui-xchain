@@ -9,7 +9,7 @@ import {
   useRole,
 } from '@floating-ui/react'
 import { BridgePanel, Disclaimer } from '@d13co/algo-x-evm-ui'
-import { useNetwork } from '@txnlab/use-wallet-react'
+import { useNetwork, NetworkId } from '@txnlab/use-wallet-react'
 import { useState, useEffect, useCallback } from 'react'
 
 import { useBridgeDialog } from '../providers/BridgeDialogProvider'
@@ -139,7 +139,7 @@ function ExpandedBridgeDialog() {
   const { activeNetwork } = useNetwork()
   const [animationState, setAnimationState] = useState<'starting' | 'entered' | 'exiting' | null>('starting')
 
-  const isMainnet = activeNetwork === 'mainnet'
+  const isMainnet = activeNetwork === NetworkId.MAINNET
   const isProcessing = PROCESSING_STATUSES.has(bridge.status)
   const isSuccess = bridge.status === 'success'
   const dataTheme = theme === 'system' ? undefined : theme
