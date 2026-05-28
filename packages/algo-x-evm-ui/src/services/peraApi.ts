@@ -15,8 +15,8 @@ interface PeraApiResponse {
   verification_tier: string
 }
 
-// In-memory cache keyed by `${network}:${assetId}`
-const cache = new Map<string, PeraAssetData>()
+// In-memory cache keyed by `${network}:${assetId}` - null marks a cached 404.
+const cache = new Map<string, PeraAssetData | null>()
 
 // In-flight dedup
 const inflight = new Map<string, Promise<PeraAssetData | null>>()
@@ -35,8 +35,7 @@ export async function fetchPeraAsset(
 ): Promise<PeraAssetData | null> {
   const key = cacheKey(network, assetId)
 
-  const cached = cache.get(key)
-  if (cached) return cached
+  if (cache.has(key)) return cache.get(key) ?? null
 
   const existing = inflight.get(key)
   if (existing) return existing
@@ -44,7 +43,10 @@ export async function fetchPeraAsset(
   const promise = (async () => {
     try {
       const res = await fetch(`${baseUrl(network)}/assets/${assetId}/`)
-      if (!res.ok) return null
+      if (!res.ok) {
+        if (res.status === 404) cache.set(key, null)
+        return null
+      }
       const json = (await res.json()) as PeraApiResponse
       const data: PeraAssetData = {
         assetId: json.asset_id,
@@ -73,9 +75,10 @@ export async function fetchPeraAssets(
   const toFetch: number[] = []
 
   for (const id of assetIds) {
-    const cached = cache.get(cacheKey(network, id))
-    if (cached) {
-      results.set(id, cached)
+    const key = cacheKey(network, id)
+    if (cache.has(key)) {
+      const cached = cache.get(key)
+      if (cached) results.set(id, cached)
     } else {
       toFetch.push(id)
     }
