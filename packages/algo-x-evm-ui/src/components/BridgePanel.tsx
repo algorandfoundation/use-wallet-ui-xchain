@@ -5,7 +5,7 @@ import { AssetSelect } from './AssetSelect'
 import { BackButton } from './BackButton'
 import { CopyButton } from './CopyButton'
 import { ExternalLinkIcon } from './ExternalLinkIcon'
-import { CheckCircleFilled, XCircleFilled } from './icons'
+import { CheckCircleFilled, XCircleFilled, RefreshCw } from './icons'
 import { SecondaryButton } from './SecondaryButton'
 import { Spinner } from './Spinner'
 
@@ -113,6 +113,11 @@ export interface BridgePanelProps {
 
   /** Auto-focus the source chain dropdown when mounted */
   autoFocusAmount?: boolean
+
+  /** Called when the user clicks the refresh button */
+  onRefresh?: () => void
+  /** True while a balance refresh is ongoing - spins the refresh icon */
+  isRefreshing?: boolean
 }
 
 export interface BridgeTransferStatus {
@@ -203,16 +208,33 @@ function formatFeeDisplay(fee: string | null): string | null {
   return value > 0 && formatted === '0' ? '<0.000001' : formatted
 }
 
-/** Get a display label for a chain, appending token balance if available */
-function chainOptionLabel(chain: BridgeChainDisplay): string {
-  // Find the first token with a non-zero balance to show
-  for (const t of chain.tokens) {
-    if (t.balance && t.balance !== '0' && t.decimals != null) {
-      const formatted = formatTokenBalance(t.balance, t.decimals)
+/** Returns a chain dropdown label display. For the active source chain (`sourceChainSymbol`),
+ * shows `sourceTokenSymbol`'s balance; for all other chains shows the highest-balance token. */
+function formatChainLabel(chain: BridgeChainDisplay, sourceChainSymbol: string | null, sourceTokenSymbol: string | null): string {
+  const selectedTokenSymbol = chain.chainSymbol === sourceChainSymbol ? sourceTokenSymbol : null
+  if (selectedTokenSymbol) {
+    const t = chain.tokens.find((t) => t.symbol === selectedTokenSymbol)
+    if (t && t.decimals != null) {
+      const formatted = t.balance && t.balance !== '0' ? formatTokenBalance(t.balance, t.decimals) : '0'
       return `${chain.chainName} (${formatted} ${t.symbol})`
     }
   }
-  return chain.chainName
+  let preferredToken: BridgeTokenDisplay | null = null
+  let amountDisplay = ''
+  let amountNormalized = 0n
+  for (const t of chain.tokens) {
+    if (!t.balance || t.balance === '0' || t.decimals == null) continue
+    const f = formatTokenBalance(t.balance, t.decimals)
+    if (f === '0') continue // skip dust amounts that round to zero at 2 decimal places
+    const n = BigInt(t.balance) * 10n ** BigInt(18 - t.decimals)
+    if (n > amountNormalized) {
+      preferredToken = t
+      amountDisplay = f
+      amountNormalized = n
+    }
+  }
+  if (!preferredToken) return chain.chainName
+  return `${chain.chainName} (${amountDisplay} ${preferredToken.symbol})`
 }
 
 // Well-known token logos (SVG from popular CDNs / data URIs)
@@ -245,6 +267,8 @@ function formatTimeRemaining(ms: number): string {
   const seconds = totalSeconds % 60
   return `${minutes}:${seconds.toString().padStart(2, '0')}`
 }
+
+const ALGO_ICON = <AlgoSymbol scale={1} />
 
 export function BridgePanel({
   chains,
@@ -290,6 +314,8 @@ export function BridgePanel({
   onBack,
   hideHeader,
   autoFocusAmount,
+  onRefresh,
+  isRefreshing,
 }: BridgePanelProps) {
   const bridgeFooterConfig = useNoticeConfig('bridgeFooter')
   const bridgeFooter = bridgeFooterConfig?.kind === 'footer' ? bridgeFooterConfig.text : null
@@ -335,15 +361,14 @@ export function BridgePanel({
     gasFee != null &&
     (sourceIsAlgorand ? algorandAddress : evmAddress && algorandAddress)
 
-  const algoIcon = <AlgoSymbol scale={1} />
   const sourceChainOptions = useMemo(
     () => chains.map((c) => ({
       value: c.chainSymbol,
-      label: chainOptionLabel(c),
+      label: formatChainLabel(c, sourceChainSymbol, sourceTokenSymbol),
       logo: CHAIN_LOGOS[c.chainSymbol] ?? null,
-      icon: c.chainSymbol === 'ALG' ? algoIcon : undefined,
+      icon: c.chainSymbol === 'ALG' ? ALGO_ICON : undefined,
     })),
-    [chains],
+    [chains, sourceChainSymbol, sourceTokenSymbol],
   )
   const sourceTokenOptions = useMemo(
     () => sourceTokens.map((t) => ({
@@ -358,7 +383,7 @@ export function BridgePanel({
       value: c.chainSymbol,
       label: c.chainName,
       logo: CHAIN_LOGOS[c.chainSymbol] ?? null,
-      icon: c.chainSymbol === 'ALG' ? algoIcon : undefined,
+      icon: c.chainSymbol === 'ALG' ? ALGO_ICON : undefined,
     })),
     [destinationChains],
   )
@@ -385,6 +410,18 @@ export function BridgePanel({
             <BackButton onClick={onBack} disabled={isProcessing} />
           )}
           <h3 className="text-lg font-bold leading-none text-[var(--wui-color-text)] wallet-custom-font">Bridge</h3>
+          {onRefresh && status === 'idle' && (
+            <button
+              type="button"
+              onClick={onRefresh}
+              disabled={isRefreshing}
+              className="ml-auto w-6 h-6 flex items-center justify-center rounded-full text-[var(--wui-color-text-secondary)] hover:text-[var(--wui-color-text)] hover:bg-[var(--wui-color-bg-tertiary)] transition-all disabled:opacity-50"
+              aria-label="Refresh balances"
+              title="Refresh balances"
+            >
+              <RefreshCw size={13} className={isRefreshing ? 'animate-spin' : ''} />
+            </button>
+          )}
         </div>
       )}
 

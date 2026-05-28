@@ -10,6 +10,7 @@ import { TransactionStatus, type TransactionStatusValue } from './TransactionSta
 const FEE_RESERVE = 0.1
 const MIN_TXN_FEE = 0.001
 const BASE_MBR = 0.1
+const ALGO_ICON = <AlgoSymbol scale={1} />
 
 export interface SendPanelProps {
   activeAddress?: string | null
@@ -91,7 +92,7 @@ export function SendPanel({
   const selectedAsset = accountAssets?.find((a) => String(a.assetId) === assetIdInput)
 
   const assetOptions = useMemo(() => {
-    const opts: { value: string; label: string; logo?: string | null; icon?: React.ReactNode; verificationTier?: AssetHoldingDisplay['verificationTier'] }[] = [{ value: 'algo', label: 'ALGO', icon: <AlgoSymbol scale={1} /> }]
+    const opts: { value: string; label: string; logo?: string | null; icon?: React.ReactNode; verificationTier?: AssetHoldingDisplay['verificationTier'] }[] = [{ value: 'algo', label: 'ALGO', icon: ALGO_ICON }]
     if (accountAssets) {
       for (const a of accountAssets) {
         opts.push({

@@ -4,6 +4,8 @@ import { formatAssetAmount, assetLabel } from '../formatters'
 import { BackButton } from './BackButton'
 import { ChevronLeft, ChevronRight } from './icons'
 
+const DANGER_FIELDS = new Set(['Rekey To', 'Close Remainder To'])
+
 function formatFee(fee: number | string | undefined): string | undefined {
   if (fee === undefined) return undefined
   const microAlgo = typeof fee === 'string' ? parseFloat(fee) : fee
@@ -55,8 +57,6 @@ export function TransactionDetail({
     }
     return undefined
   }
-
-  const dangerFields = new Set(['Rekey To', 'Close Remainder To'])
 
   const detailRows: Array<[string, string | number | boolean | undefined]> = [
     // Core
@@ -130,7 +130,7 @@ export function TransactionDetail({
       {/* Detail fields */}
       <div className="px-6 pb-4 space-y-3 max-h-80 overflow-y-auto">
         {visibleDetails.map(([label, value]) => {
-          const isDanger = dangerFields.has(label)
+          const isDanger = DANGER_FIELDS.has(label)
           return (
             <div key={label} className="flex flex-col gap-0.5">
               <span className={`text-[10px] uppercase tracking-wide ${isDanger ? 'text-[var(--wui-color-danger-text)] font-bold' : 'text-[var(--wui-color-text-secondary)]'}`}>

@@ -12,6 +12,9 @@ import {
   getExtraGasMaxLimits,
   getTransferStatus,
   fetchEvmTokenBalances,
+  getEvmBalanceCache,
+  setEvmBalanceCache,
+  clearAllEvmBalanceCaches,
   DEFAULT_RPC_URLS,
   type AllbridgeCoreSdk,
   type ChainDetailsWithTokens,
@@ -87,11 +90,9 @@ export interface UseBridgePanelReturn {
   chainsLoading: boolean
   balancesLoading: boolean
   /**
-   * True once chains are loaded AND — if the user has a wallet connected — the
-   * first balance fetch has completed (success or failure). Consumers should
-   * gate the form on this rather than just `chainsLoading` so the chain select
-   * labels (which include the wallet's balance) render with their final width
-   * on first paint instead of updating after the form is visible.
+   * True once chains are loaded and - if a wallet is connected - the initial
+   * balance fetch has settled. Gate the form on this instead of `chainsLoading`, so
+   * chain labels (which include the balances) are complete on first paint.
    */
   initialLoadComplete: boolean
   sourceChain: BridgeChain | null
@@ -145,6 +146,7 @@ export interface UseBridgePanelReturn {
   handleBridge: () => Promise<void>
   reset: () => void
   retry: () => void
+  refreshBalances: () => Promise<void>
 }
 
 // Minimum available balance in microAlgos to perform an opt-in (0.1 MBR + 0.001 fee)
@@ -254,9 +256,32 @@ function resolveTransferStatus({
   return null
 }
 
+/** Returns the chain and token with the highest non-dust balance, or null if all are dust/zero. */
+function preferredChainAndToken(
+  balances: TokenBalanceMap,
+  chains: ChainDetailsWithTokens[],
+): { chain: ChainDetailsWithTokens; token: TokenWithChainDetails } | null {
+  let preferredChain: ChainDetailsWithTokens | null = null
+  let preferredToken: TokenWithChainDetails | null = null
+  let balanceDisplay = 0
+  for (const c of chains) {
+    for (const t of c.tokens) {
+      const bal = balances[`${c.chainSymbol}:${t.symbol}`] ?? 0n
+      const d = Number(bal) / 10 ** t.decimals
+      if (Math.floor(d * 100) === 0) continue // skip dust
+      if (d > balanceDisplay) {
+        balanceDisplay = d
+        preferredChain = c
+        preferredToken = t
+      }
+    }
+  }
+  return balanceDisplay > 0 ? { chain: preferredChain!, token: preferredToken! } : null
+}
+
 // Map Allbridge chain symbols to their native currency ticker for fee display
 export function useBridgePanel(wallet: BridgeWalletAdapter, options: UseBridgeOptions = {}): UseBridgePanelReturn {
-  const { activeAddress, algodClient, signTransactions, onTransactionSuccess, evmAddress, isAlgoXEvm, getEvmProvider } = wallet
+  const { activeAddress, algodClient, signTransactions, onTransactionSuccess, evmAddress, isAlgoXEvm, getEvmProvider, algorandAccountInfo, algorandAccountInfoFetched, onRefreshAlgorandBalance } = wallet
   const enabled = options.enabled ?? true
 
   // Persisted bridge state for reload recovery
@@ -271,11 +296,10 @@ export function useBridgePanel(wallet: BridgeWalletAdapter, options: UseBridgeOp
   // Token balance state
   const [tokenBalances, setTokenBalances] = useState<TokenBalanceMap>({})
   const [balancesLoading, setBalancesLoading] = useState(false)
-  // Flips true once either the EVM or ALG balance fetch has completed at least
-  // once (or immediately if there's no wallet to fetch for). Used to gate the
-  // form render so chain-select labels don't visually swap from "Ethereum" to
-  // "Ethereum (X USDC)" after the form first appears.
-  const [balancesFetchedOnce, setBalancesFetchedOnce] = useState(false)
+  const [evmBalancesFetchedOnce, setEvmBalancesFetchedOnce] = useState(false)
+  const [algoBalancesFetchedOnce, setAlgoBalancesFetchedOnce] = useState(false)
+  const prevEvmAddressRef = useRef<string | null>(evmAddress ?? null)
+  const prevAlgorandAddressRef = useRef<string | null>(null)
 
   // Selection state
   const [selectedSourceChainSymbol, setSelectedSourceChainSymbol] = useState<string | null>(null)
@@ -337,11 +361,13 @@ export function useBridgePanel(wallet: BridgeWalletAdapter, options: UseBridgeOp
   // Direction flag: true when bridging FROM Algorand TO an EVM chain
   const sourceIsAlgorand = selectedSourceChainSymbol === 'ALG'
 
-  // True once initial data is ready to render the form. Waits for chains AND —
-  // when a wallet is connected — the first balance fetch, so the source-chain
-  // select renders with its final (balance-inclusive) label on first paint.
-  const hasWalletForBalances = !!evmAddress || !!activeAddress
-  const initialLoadComplete = allChains.length > 0 && (!hasWalletForBalances || balancesFetchedOnce)
+  // Not conditioned on source direction - flags only reset on address changes.
+  const balancesFetchedOnce =
+    (!evmAddress || evmBalancesFetchedOnce) &&
+    (!algorandAddress || algoBalancesFetchedOnce)
+  // True once chains are loaded AND - if a wallet is connected - both EVM and ALG
+  // balance fetches have settled, so the chain select renders with final labels on first paint.
+  const initialLoadComplete = allChains.length > 0 && balancesFetchedOnce
 
   // Effective destination chain: defaults to ALG for EVM→ALG, or the selected EVM chain for ALG→EVM
   const effectiveDestChainSymbol = selectedDestChainSymbol ?? 'ALG'
@@ -480,34 +506,17 @@ export function useBridgePanel(wallet: BridgeWalletAdapter, options: UseBridgeOp
         if (cancelled) return
         setAllChains(chainList)
 
-        // Auto-select source: if EVM address available, pick first EVM chain;
-        // otherwise if only Algorand address, pick ALG as source
+        // Always default to EVM→ALG direction (users can switch to ALG→EVM manually)
         if (evmAddress) {
           const firstEvm = chainList.find((c) => c.chainType === 'EVM')
           if (firstEvm && firstEvm.tokens.length > 0) {
             setSelectedSourceChainSymbol(firstEvm.chainSymbol)
             setSelectedSourceTokenSymbol(firstEvm.tokens[0].symbol)
           }
-          // EVM→ALG: destination is always ALG (null = default to 'ALG')
-          setSelectedDestChainSymbol(null)
+          setSelectedDestChainSymbol(null) // null defaults to ALG
           const algChain = chainList.find((c) => c.chainSymbol === 'ALG')
           if (algChain && algChain.tokens.length > 0) {
             setSelectedDestTokenSymbol(algChain.tokens[0].symbol)
-          }
-        } else if (activeAddress) {
-          // No EVM address — default to ALG→EVM direction
-          setSelectedSourceChainSymbol('ALG')
-          const algChain = chainList.find((c) => c.chainSymbol === 'ALG')
-          if (algChain && algChain.tokens.length > 0) {
-            setSelectedSourceTokenSymbol(algChain.tokens[0].symbol)
-          }
-          // Auto-select first EVM chain as destination
-          const firstEvm = chainList.find((c) => c.chainType === 'EVM')
-          if (firstEvm) {
-            setSelectedDestChainSymbol(firstEvm.chainSymbol)
-            if (firstEvm.tokens.length > 0) {
-              setSelectedDestTokenSymbol(firstEvm.tokens[0].symbol)
-            }
           }
         }
       } catch (err) {
@@ -522,11 +531,45 @@ export function useBridgePanel(wallet: BridgeWalletAdapter, options: UseBridgeOp
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // -- Fetch EVM token balances when evmAddress and chains are available --
+  // -- Handle account change --
+  // Disconnect clears all EVM caches; wallet switch keeps to optimize RPC calls.
+
+  useEffect(() => {
+    const prevEvm = prevEvmAddressRef.current
+    const nextEvm = evmAddress ?? null
+    const prevAlgo = prevAlgorandAddressRef.current
+    const nextAlgo = algorandAddress
+    prevEvmAddressRef.current = nextEvm
+    prevAlgorandAddressRef.current = nextAlgo
+    if (prevEvm === nextEvm && prevAlgo === nextAlgo) return
+    if (prevEvm && !nextEvm) clearAllEvmBalanceCaches()
+    setEvmBalancesFetchedOnce(false)
+    setAlgoBalancesFetchedOnce(false)
+    setTokenBalances({})
+  }, [evmAddress, algorandAddress])
+
+  // -- Fetch EVM token balances (cache-aware) --
+  // Cache hit: instant display, zero RPC calls.
+  // Cache miss (first visit or post-disconnect): fetch ALL EVM chains so the
+  // balance-based chain sort always has complete data.
 
   useEffect(() => {
     if (!enabled) return
     if (!evmAddress || allChains.length === 0) return
+
+    const cached = getEvmBalanceCache(evmAddress)
+    if (cached) {
+      setTokenBalances((prev) => ({ ...prev, ...cached }))
+      if (!userHasSelectedChainRef.current) {
+        const p = preferredChainAndToken(cached, allChains.filter((c) => c.chainType === 'EVM'))
+        if (p) {
+          setSelectedSourceChainSymbol(p.chain.chainSymbol)
+          setSelectedSourceTokenSymbol(p.token.symbol)
+        }
+      }
+      setEvmBalancesFetchedOnce(true)
+      return
+    }
 
     let cancelled = false
     setBalancesLoading(true)
@@ -534,83 +577,53 @@ export function useBridgePanel(wallet: BridgeWalletAdapter, options: UseBridgeOp
       try {
         const balances = await fetchEvmTokenBalances(evmAddress, allChains, options.nodeRpcUrls)
         if (cancelled) return
-        setTokenBalances(balances)
+        setEvmBalanceCache(evmAddress, balances)
+        setTokenBalances((prev) => ({ ...prev, ...balances }))
 
-        // Auto-select the highest-balance chain if the user hasn't manually selected one
         if (!userHasSelectedChainRef.current) {
-          const evmChains = allChains.filter((c) => c.chainType === 'EVM')
-          let bestChain: ChainDetailsWithTokens | null = null
-          let bestTotal = 0n
-          for (const chain of evmChains) {
-            let total = 0n
-            for (const token of chain.tokens) {
-              const bal = balances[`${chain.chainSymbol}:${token.symbol}`] ?? 0n
-              total += bal * 10n ** BigInt(18 - token.decimals)
-            }
-            if (total > bestTotal) {
-              bestTotal = total
-              bestChain = chain
-            }
-          }
-          if (bestChain && bestTotal > 0n) {
-            setSelectedSourceChainSymbol(bestChain.chainSymbol)
-            setSelectedSourceTokenSymbol(bestChain.tokens[0]?.symbol ?? null)
+          const p = preferredChainAndToken(balances, allChains.filter((c) => c.chainType === 'EVM'))
+          if (p) {
+            setSelectedSourceChainSymbol(p.chain.chainSymbol)
+            setSelectedSourceTokenSymbol(p.token.symbol)
           }
         }
       } catch (err) {
-        console.warn('[useBridgePanel] Balance fetch failed:', err)
+        console.warn('[useBridgePanel] EVM balance fetch failed:', err)
       } finally {
         if (!cancelled) {
           setBalancesLoading(false)
-          setBalancesFetchedOnce(true)
+          setEvmBalancesFetchedOnce(true)
         }
       }
     })()
 
-    return () => {
-      cancelled = true
-    }
+    return () => { cancelled = true }
   }, [enabled, evmAddress, allChains, options.nodeRpcUrls])
 
-  // -- Fetch Algorand ASA balances when source is ALG --
+  // -- Derive Algorand ASA balances from React Query account info --
+  // Refreshed automatically on window focus, bridge success, and manual refresh.
 
   useEffect(() => {
-    if (!enabled) return
-    if (!sourceIsAlgorand || !algorandAddress || !algodClient || allChains.length === 0) return
-
+    if (!algorandAddress) return
     const algChain = allChains.find((c) => c.chainSymbol === 'ALG')
-    if (!algChain || algChain.tokens.length === 0) return
-
-    let cancelled = false
-    setBalancesLoading(true)
-    ;(async () => {
-      try {
-        const info = await algodClient.accountInformation(algorandAddress).do()
-        const balances: TokenBalanceMap = {}
-        for (const token of algChain.tokens) {
-          const assetId = Number(token.tokenAddress)
-          const holding = info.assets?.find(
-            (a: { assetId: number | bigint }) => Number(a.assetId) === assetId,
-          )
-          balances[`ALG:${token.symbol}`] = holding ? BigInt(holding.amount) : 0n
-        }
-        if (!cancelled) {
-          setTokenBalances((prev) => ({ ...prev, ...balances }))
-        }
-      } catch (err) {
-        console.warn('[useBridgePanel] ALG balance fetch failed:', err)
-      } finally {
-        if (!cancelled) {
-          setBalancesLoading(false)
-          setBalancesFetchedOnce(true)
-        }
+    if (algorandAccountInfo && algChain && algChain.tokens.length > 0) {
+      const balances: TokenBalanceMap = {}
+      for (const token of algChain.tokens) {
+        const assetId = Number(token.tokenAddress)
+        const holding = algorandAccountInfo.assets?.find(
+          (a: { assetId: number | bigint }) => Number(a.assetId) === assetId,
+        )
+        balances[`ALG:${token.symbol}`] = holding ? BigInt(holding.amount) : 0n
       }
-    })()
-
-    return () => {
-      cancelled = true
+      setTokenBalances((prev) => {
+        const withoutAlg = Object.fromEntries(Object.entries(prev).filter(([k]) => !k.startsWith('ALG:')))
+        return { ...withoutAlg, ...balances }
+      })
     }
-  }, [enabled, sourceIsAlgorand, algorandAddress, algodClient, allChains])
+    if (algorandAccountInfoFetched) {
+      setAlgoBalancesFetchedOnce(true)
+    }
+  }, [algorandAccountInfo, algorandAccountInfoFetched, algorandAddress, allChains])
 
   // -- Fetch gas fees when tokens change --
   // Also checks whether the Algorand account has low balance and pre-computes
@@ -629,6 +642,9 @@ export function useBridgePanel(wallet: BridgeWalletAdapter, options: UseBridgeOp
       setExtraGasAlgo(null)
       return
     }
+
+    // EVM→ALG: block fee calculation until account info resolves - extra gas amount depends on it.
+    if (!sourceIsAlgorand && algorandAddress && !algorandAccountInfoFetched) return
 
     let cancelled = false
     setGasFeeLoading(true)
@@ -650,16 +666,15 @@ export function useBridgePanel(wallet: BridgeWalletAdapter, options: UseBridgeOp
         // Only relevant when destination is Algorand (EVM→ALG direction).
         let extraGasFloat: string | null = null
         let extraGasAlgoValue: string | null = null
-        if (!cancelled && !sourceIsAlgorand && algorandAddress && algodClient) {
+        if (!cancelled && !sourceIsAlgorand && algorandAddress) {
           let needsExtraGas = false
           let isZeroBalance = false
-          try {
-            const info = await algodClient.accountInformation(algorandAddress).do()
-            const available = Number(info.amount) - Number(info.minBalance)
-            isZeroBalance = Number(info.amount) === 0
+          if (algorandAccountInfo) {
+            const available = Number(algorandAccountInfo.amount) - Number(algorandAccountInfo.minBalance)
+            isZeroBalance = Number(algorandAccountInfo.amount) === 0
             needsExtraGas = available < LOW_BALANCE_THRESHOLD_MICRO
-          } catch {
-            // Network error or account doesn't exist — assume bootstrapping from zero
+          } else {
+            // Fetched but null → account doesn't exist on-chain → bootstrapping from zero
             needsExtraGas = true
             isZeroBalance = true
           }
@@ -723,7 +738,7 @@ export function useBridgePanel(wallet: BridgeWalletAdapter, options: UseBridgeOp
     return () => {
       cancelled = true
     }
-  }, [enabled, resolveSourceSdkToken, resolveDestSdkToken, algorandAddress, algodClient, sourceIsAlgorand])
+  }, [enabled, resolveSourceSdkToken, resolveDestSdkToken, algorandAddress, algorandAccountInfo, algorandAccountInfoFetched, sourceIsAlgorand])
 
   // -- Compute estimated transfer time when tokens change --
 
@@ -834,14 +849,20 @@ export function useBridgePanel(wallet: BridgeWalletAdapter, options: UseBridgeOp
     }
   }, [amount, gasFee, gasFeeLoading, extraGasAmount, resolveSourceSdkToken, resolveDestSdkToken])
 
-  // -- Refresh source chain balances after a successful EVM bridge --
+  // -- Refresh EVM balances after a successful bridge (both directions) --
+  // ALG balances refresh via onTransactionSuccess; this refreshes the EVM chain involved.
 
   useEffect(() => {
-    if (status !== 'success' || sourceIsAlgorand || !evmAddress || !selectedSourceChainSymbol) return
-    const sourceChainData = allChains.filter((c) => c.chainSymbol === selectedSourceChainSymbol)
-    if (sourceChainData.length === 0) return
-    fetchEvmTokenBalances(evmAddress, sourceChainData, options.nodeRpcUrls)
-      .then((balances) => setTokenBalances((prev) => ({ ...prev, ...balances })))
+    if (status !== 'success' || !evmAddress) return
+    const evmChainSymbol = sourceIsAlgorand ? effectiveDestChainSymbol : selectedSourceChainSymbol
+    if (!evmChainSymbol) return
+    const chainToRefresh = allChains.find((c) => c.chainSymbol === evmChainSymbol)
+    if (!chainToRefresh) return
+    fetchEvmTokenBalances(evmAddress, [chainToRefresh], options.nodeRpcUrls)
+      .then((balances) => {
+        setEvmBalanceCache(evmAddress, { ...getEvmBalanceCache(evmAddress) ?? {}, ...balances })
+        setTokenBalances((prev) => ({ ...prev, ...balances }))
+      })
       .catch(() => {})
   }, [status]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -1024,6 +1045,25 @@ export function useBridgePanel(wallet: BridgeWalletAdapter, options: UseBridgeOp
 
   // -- Actions --
 
+  const refreshBalances = useCallback(async () => {
+    setBalancesLoading(true)
+    try {
+      // Refresh EVM balances
+      if (evmAddress && allChains.length > 0) {
+        const evmChains = allChains.filter((c) => c.chainType === 'EVM')
+        const balances = await fetchEvmTokenBalances(evmAddress, evmChains, options.nodeRpcUrls)
+        setEvmBalanceCache(evmAddress, balances)
+        setTokenBalances((prev) => ({ ...prev, ...balances }))
+      }
+      // Refresh Algorand balances
+      await onRefreshAlgorandBalance?.()
+    } catch (err) {
+      console.warn('[useBridgePanel] Refresh failed:', err)
+    } finally {
+      setBalancesLoading(false)
+    }
+  }, [evmAddress, allChains, onRefreshAlgorandBalance, options.nodeRpcUrls]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const reset = useCallback(() => {
     abortRef.current?.abort()
     try { localStorage.removeItem(BRIDGE_PERSIST_KEY) } catch {}
@@ -1059,10 +1099,17 @@ export function useBridgePanel(wallet: BridgeWalletAdapter, options: UseBridgeOp
     (symbol: string) => {
       userHasSelectedChainRef.current = true
       setSelectedSourceChainSymbol(symbol)
-      // Auto-select first token of the new chain
+      // Auto-select the highest-balance token - mirrors what formatChainLabel shows in the dropdown label
       const chain = chains.find((c) => c.chainSymbol === symbol)
       if (chain && chain.tokens.length > 0) {
-        setSelectedSourceTokenSymbol(chain.tokens[0].symbol)
+        // Dust amounts (round to 0.00) are skipped; fall back to USDC when all are dust or zero
+        const toDisplay = (t: BridgeToken) => (t.balance ? Number(t.balance) / 10 ** t.decimals : 0)
+        const defaultToken = chain.tokens.find((t) => t.symbol === 'USDC') ?? chain.tokens[0]
+        const winner = chain.tokens.reduce((acc, t) => {
+          const d = toDisplay(t)
+          return Math.floor(d * 100) > 0 && d > toDisplay(acc) ? t : acc
+        }, defaultToken)
+        setSelectedSourceTokenSymbol(winner.symbol)
       } else {
         setSelectedSourceTokenSymbol(null)
       }
@@ -1122,7 +1169,7 @@ export function useBridgePanel(wallet: BridgeWalletAdapter, options: UseBridgeOp
   async function checkAndPrepareOptIn(destSdkToken: TokenWithChainDetails): Promise<{ needed: boolean; canAfford: boolean }> {
     if (!algorandAddress || !algodClient) return { needed: false, canAfford: false }
 
-    const info = await algodClient.accountInformation(algorandAddress).do()
+    const info = algorandAccountInfo ?? await algodClient.accountInformation(algorandAddress).do()
     const assetId = Number(destSdkToken.tokenAddress)
     const isOptedIn = info.assets?.some((a: { assetId: number | bigint }) => Number(a.assetId) === assetId)
 
@@ -1769,5 +1816,6 @@ export function useBridgePanel(wallet: BridgeWalletAdapter, options: UseBridgeOp
     handleBridge,
     reset,
     retry,
+    refreshBalances,
   }
 }

@@ -41,7 +41,7 @@ export function BackButton({
       disabled={disabled}
       className={
         className ??
-        '-ml-1 p-1 rounded-lg hover:bg-[var(--wui-color-bg-secondary)] transition-colors text-[var(--wui-color-text-secondary)] flex items-center justify-center disabled:opacity-40'
+        'wui-panel-back -ml-1 p-1 rounded-lg hover:bg-[var(--wui-color-bg-secondary)] transition-colors text-[var(--wui-color-text-secondary)] flex items-center justify-center disabled:opacity-40'
       }
       title={title ?? 'Back'}
       aria-label={ariaLabel}

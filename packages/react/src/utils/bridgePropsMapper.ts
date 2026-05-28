@@ -73,6 +73,8 @@ export function mapBridgeToPanelProps(
     onBridge: bridge.handleBridge,
     onReset: bridge.reset,
     onRetry: bridge.retry,
+    onRefresh: bridge.refreshBalances,
+    isRefreshing: bridge.balancesLoading,
     onBack,
   }
 }
