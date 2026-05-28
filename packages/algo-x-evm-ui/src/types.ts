@@ -118,9 +118,9 @@ export interface BridgeWalletAdapter extends WalletAdapter {
   isAlgoXEvm: boolean
   getEvmProvider?: () => Promise<EIP1193Provider>
   /** Algorand account data. If `algorandAccountInfoFetched` is true, can still be null if the account is non-existent. */
-  algorandAccountInfo?: algosdk.modelsv2.Account | null
+  algorandAccountInfo: algosdk.modelsv2.Account | null | undefined
   /** True once the account info has resolved at least once (success or error). */
-  algorandAccountInfoFetched?: boolean
+  algorandAccountInfoFetched: boolean
   /** Called when the user triggers a manual balance refresh. */
-  onRefreshAlgorandBalance?: () => unknown
+  onRefreshAlgorandBalance: () => unknown
 }
