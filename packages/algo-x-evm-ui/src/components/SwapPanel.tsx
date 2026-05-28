@@ -57,6 +57,8 @@ export interface SwapPanelProps {
   fetchPeraData?: (assetIds: number[]) => void
 }
 
+const ALGO_ICON = <AlgoSymbol scale={1} />
+
 function formatOutputAmount(quote: SwapQuoteDisplay, decimals: number): string {
   const amount = Number(quote.quote) / 10 ** decimals
   return amount.toLocaleString(undefined, {
@@ -116,7 +118,6 @@ export function SwapPanel({
     fetchPeraData([searchLookupInfo.index])
   }, [searchLookupInfo, fetchPeraData, peraData])
 
-  const algoIcon = <AlgoSymbol scale={1} />
   const [searchOpen, setSearchOpen] = useState(false)
   const searchEnabled = !!setSearchInput && !!pickDiscoveredAsset
 
@@ -127,7 +128,7 @@ export function SwapPanel({
 
   const fromOptions = useMemo(() => {
     const opts: { value: string; label: string; logo?: string | null; icon?: React.ReactNode; verificationTier?: AssetHoldingDisplay['verificationTier'] }[] = [
-      { value: '0', label: 'ALGO', icon: algoIcon },
+      { value: '0', label: 'ALGO', icon: ALGO_ICON },
     ]
     if (accountAssets) {
       for (const a of accountAssets) {

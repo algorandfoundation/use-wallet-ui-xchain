@@ -4,6 +4,7 @@ import { formatAssetAmount, assetLabel } from '../formatters'
 const ARROW = <span className="text-[var(--wui-color-text-secondary)] px-2">&rarr;</span>
 const DASH = <span className="text-[var(--wui-color-text-secondary)] px-2">&mdash;</span>
 const EMPTY_ESCROWS: Record<string, string> = {}
+const FLOW_COLS = 'w-full grid grid-cols-[1fr_auto_1fr] items-center text-xs'
 
 export interface TransactionFlowProps {
   txn: TransactionData
@@ -30,12 +31,10 @@ export function TransactionFlow({ txn, assetInfo, appEscrows = EMPTY_ESCROWS }: 
 
   /** Summary line per transaction type */
   const renderSummary = () => {
-    const cols = 'w-full grid grid-cols-[1fr_auto_1fr] items-center text-xs'
-
     switch (txn.type) {
       case 'pay':
         return (
-          <div className={cols}>
+          <div className={FLOW_COLS}>
             <span className="text-[var(--wui-color-text-secondary)] truncate">{txn.senderShort}</span>
             <span className="text-[var(--wui-color-primary)] font-medium whitespace-nowrap text-center">
               {DASH} {amountDisplay()} {ARROW}
@@ -49,7 +48,7 @@ export function TransactionFlow({ txn, assetInfo, appEscrows = EMPTY_ESCROWS }: 
       case 'axfer':
         if (isOptIn) {
           return (
-            <div className={cols}>
+            <div className={FLOW_COLS}>
               <span className="text-[var(--wui-color-text-secondary)] truncate">{txn.senderShort}</span>
               <span className="text-[var(--wui-color-primary)] font-medium whitespace-nowrap text-center">
                 {DASH} Opt In {ARROW}
@@ -61,7 +60,7 @@ export function TransactionFlow({ txn, assetInfo, appEscrows = EMPTY_ESCROWS }: 
           )
         }
         return (
-          <div className={cols}>
+          <div className={FLOW_COLS}>
             <span className="text-[var(--wui-color-text-secondary)] truncate">{txn.senderShort}</span>
             <span className="text-[var(--wui-color-primary)] font-medium whitespace-nowrap text-center">
               {DASH} {amountDisplay()} {ARROW}
@@ -74,7 +73,7 @@ export function TransactionFlow({ txn, assetInfo, appEscrows = EMPTY_ESCROWS }: 
 
       case 'afrz':
         return (
-          <div className={cols}>
+          <div className={FLOW_COLS}>
             <span className="text-[var(--wui-color-text-secondary)] truncate">{txn.senderShort}</span>
             <span className="text-[var(--wui-color-primary)] font-medium whitespace-nowrap text-center">
               {DASH} {txn.isFreezing ? 'Freeze' : 'Unfreeze'} {assetLabel(txn, assetInfo)} {ARROW}
@@ -85,7 +84,7 @@ export function TransactionFlow({ txn, assetInfo, appEscrows = EMPTY_ESCROWS }: 
 
       case 'acfg':
         return (
-          <div className={cols}>
+          <div className={FLOW_COLS}>
             <span className="text-[var(--wui-color-text-secondary)] truncate">{txn.senderShort}</span>
             <span className="text-[var(--wui-color-primary)] font-medium whitespace-nowrap text-center">
               {DASH} Configure {ARROW}
@@ -98,7 +97,7 @@ export function TransactionFlow({ txn, assetInfo, appEscrows = EMPTY_ESCROWS }: 
 
       case 'appl':
         return (
-          <div className={cols}>
+          <div className={FLOW_COLS}>
             <span className="text-[var(--wui-color-text-secondary)] truncate">{txn.senderShort}</span>
             <span className="text-[var(--wui-color-primary)] font-medium whitespace-nowrap text-center">
               {DASH} App Call {ARROW}
@@ -111,7 +110,7 @@ export function TransactionFlow({ txn, assetInfo, appEscrows = EMPTY_ESCROWS }: 
 
       case 'keyreg':
         return (
-          <div className={cols}>
+          <div className={FLOW_COLS}>
             <span className="text-[var(--wui-color-text-secondary)] truncate">{txn.senderShort}</span>
             <span className="text-[var(--wui-color-primary)] font-medium whitespace-nowrap text-center">
               {DASH} Key Reg {ARROW}
@@ -124,7 +123,7 @@ export function TransactionFlow({ txn, assetInfo, appEscrows = EMPTY_ESCROWS }: 
 
       default:
         return (
-          <div className={cols}>
+          <div className={FLOW_COLS}>
             <span className="text-[var(--wui-color-text-secondary)] truncate">{txn.senderShort}</span>
             <span className="text-[var(--wui-color-primary)] font-medium whitespace-nowrap text-center">
               {DASH} {txn.typeLabel} {ARROW}

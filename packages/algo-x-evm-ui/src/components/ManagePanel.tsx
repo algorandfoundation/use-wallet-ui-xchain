@@ -63,6 +63,8 @@ const balanceFormatter = new Intl.NumberFormat(undefined, {
 
 const INITIAL_ASSET_COUNT = 3
 
+const actionBtnClass = "py-2.5 px-4 bg-[var(--wui-color-bg-tertiary)] text-[var(--wui-color-text)] font-medium rounded-xl hover:brightness-90 transition-all text-sm flex items-center justify-center disabled:opacity-40 disabled:pointer-events-none"
+
 function formatDisplayAmount(amount: string): string {
   const num = parseFloat(amount)
   if (isNaN(num)) return amount
@@ -368,8 +370,6 @@ export function ManagePanel({
       )}
     </div>
   ) : null
-
-  const actionBtnClass = "py-2.5 px-4 bg-[var(--wui-color-bg-tertiary)] text-[var(--wui-color-text)] font-medium rounded-xl hover:brightness-90 transition-all text-sm flex items-center justify-center disabled:opacity-40 disabled:pointer-events-none"
 
   const actionButtons = (vertical: boolean) => (
     <div className={vertical ? 'flex flex-col gap-2' : 'grid grid-cols-2 gap-2'}>

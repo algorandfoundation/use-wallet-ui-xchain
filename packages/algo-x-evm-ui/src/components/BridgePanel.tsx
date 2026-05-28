@@ -268,6 +268,8 @@ function formatTimeRemaining(ms: number): string {
   return `${minutes}:${seconds.toString().padStart(2, '0')}`
 }
 
+const ALGO_ICON = <AlgoSymbol scale={1} />
+
 export function BridgePanel({
   chains,
   chainsLoading,
@@ -359,13 +361,12 @@ export function BridgePanel({
     gasFee != null &&
     (sourceIsAlgorand ? algorandAddress : evmAddress && algorandAddress)
 
-  const algoIcon = <AlgoSymbol scale={1} />
   const sourceChainOptions = useMemo(
     () => chains.map((c) => ({
       value: c.chainSymbol,
       label: formatChainLabel(c, sourceChainSymbol, sourceTokenSymbol),
       logo: CHAIN_LOGOS[c.chainSymbol] ?? null,
-      icon: c.chainSymbol === 'ALG' ? algoIcon : undefined,
+      icon: c.chainSymbol === 'ALG' ? ALGO_ICON : undefined,
     })),
     [chains, sourceChainSymbol, sourceTokenSymbol],
   )
@@ -382,7 +383,7 @@ export function BridgePanel({
       value: c.chainSymbol,
       label: c.chainName,
       logo: CHAIN_LOGOS[c.chainSymbol] ?? null,
-      icon: c.chainSymbol === 'ALG' ? algoIcon : undefined,
+      icon: c.chainSymbol === 'ALG' ? ALGO_ICON : undefined,
     })),
     [destinationChains],
   )
