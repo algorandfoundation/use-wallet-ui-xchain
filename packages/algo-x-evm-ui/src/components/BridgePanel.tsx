@@ -412,9 +412,11 @@ export function BridgePanel({
           <h3 className="text-lg font-bold leading-none text-[var(--wui-color-text)] wallet-custom-font">Bridge</h3>
           {onRefresh && status === 'idle' && (
             <button
+              type="button"
               onClick={onRefresh}
               disabled={isRefreshing}
               className="ml-auto w-6 h-6 flex items-center justify-center rounded-full text-[var(--wui-color-text-secondary)] hover:text-[var(--wui-color-text)] hover:bg-[var(--wui-color-bg-tertiary)] transition-all disabled:opacity-50"
+              aria-label="Refresh balances"
               title="Refresh balances"
             >
               <RefreshCw size={13} className={isRefreshing ? 'animate-spin' : ''} />

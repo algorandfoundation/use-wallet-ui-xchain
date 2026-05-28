@@ -205,9 +205,11 @@ function ExpandedBridgeDialog() {
                 <div className="flex items-center gap-1">
                 {!isProcessing && (
                   <button
+                    type="button"
                     onClick={() => bridge.refreshBalances()}
                     disabled={bridge.balancesLoading}
                     className="w-7 h-7 flex items-center justify-center rounded-full bg-[var(--wui-color-bg-tertiary)] text-[var(--wui-color-text-secondary)] hover:brightness-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    aria-label="Refresh balances"
                     title="Refresh balances"
                   >
                     <svg

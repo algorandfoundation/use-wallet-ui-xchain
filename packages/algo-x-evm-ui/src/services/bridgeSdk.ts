@@ -103,8 +103,9 @@ export async function getTransferStatus(
 /** Map keyed by `"chainSymbol:tokenSymbol"` → raw balance in smallest units */
 export type TokenBalanceMap = Record<string, bigint>
 
-/** Per EVM address balance cache to avoid redundant RPC calls when switching 
- * between accounts. Cleared on wallet disconnect or manually via `refreshBalances`. */
+/** Per EVM address balance cache to avoid redundant RPC calls when switching
+ * between accounts. Cleared on wallet disconnect; on manual refresh the current
+ * address entry is overwritten with fresh data. */
 const evmBalanceCache = new Map<string, TokenBalanceMap>()
 
 export function getEvmBalanceCache(address: string): TokenBalanceMap | null {
