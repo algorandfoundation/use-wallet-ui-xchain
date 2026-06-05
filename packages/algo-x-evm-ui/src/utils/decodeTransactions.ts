@@ -1,63 +1,13 @@
 import algosdk from 'algosdk'
-import { formatShortAddress } from '@txnlab/utils-ts'
+import type { TransactionData, TransactionDanger } from '../types'
 
-export interface DecodedTransaction {
-  index: number
-  type: string
-  typeLabel: string
-  sender: string
-  senderShort: string
-  receiver?: string
-  receiverShort?: string
-  amount?: string
-  rawAmount?: bigint
-  assetIndex?: number
-  appIndex?: number
-  rekeyTo?: string
-  rekeyToShort?: string
-  closeRemainderTo?: string
-  closeRemainderToShort?: string
-  freezeTarget?: string
-  freezeTargetShort?: string
-  isFreezing?: boolean
-  // Common fields
-  fee?: number
-  firstValid?: number
-  lastValid?: number
-  genesisID?: string
-  genesisHash?: string
-  group?: string
-  lease?: string
-  note?: string
-  // App call fields
-  onComplete?: string
-  appArgs?: string[]
-  appAccounts?: string[]
-  appForeignApps?: string[]
-  appForeignAssets?: string[]
-  approvalProgram?: string
-  clearProgram?: string
-  // Key registration fields
-  voteKey?: string
-  selectionKey?: string
-  stateProofKey?: string
-  voteFirst?: number
-  voteLast?: number
-  voteKeyDilution?: number
-  nonParticipation?: boolean
-  // Asset config fields
-  assetTotal?: string
-  assetDecimals?: number
-  assetDefaultFrozen?: boolean
-  assetManager?: string
-  assetReserve?: string
-  assetFreeze?: string
-  assetClawback?: string
-  assetUnitName?: string
-  assetName?: string
-  assetURL?: string
-  // Asset transfer fields
-  assetSender?: string
+/**
+ * Extracted utility from `@txnlab/utils-ts` to avoid depending on the entire library.
+ */
+function formatShortAddress(address: string, prefixLength = 5, suffixLength = 5): string {
+  return address.length <= prefixLength + suffixLength
+    ? address
+    : `${address.slice(0, prefixLength)}...${address.slice(-suffixLength)}`
 }
 
 const TYPE_LABELS: Record<string, string> = {
@@ -70,8 +20,6 @@ const TYPE_LABELS: Record<string, string> = {
   stpf: 'State Proof',
   hb: 'Heartbeat',
 }
-
-export type TransactionDanger = ('rekey' | 'closeTo')[] | false
 
 function tryDecodeTxn(bytes: Uint8Array): algosdk.Transaction | null {
   try {
@@ -96,8 +44,8 @@ function formatAmount(amountBigInt: bigint, type: string): string {
 
 export function decodeTransactions(
   txnGroup: algosdk.Transaction[] | Uint8Array[],
-): { transactions: algosdk.Transaction[]; decodedTransactions: DecodedTransaction[]; dangerous: TransactionDanger; genesisHash: string | null; genesisID: string | null } {
-  const result: DecodedTransaction[] = []
+): { transactions: algosdk.Transaction[]; decodedTransactions: TransactionData[]; dangerous: TransactionDanger; genesisHash: string | null; genesisID: string | null } {
+  const result: TransactionData[] = []
   const transactions: algosdk.Transaction[] = []
   const dangerousList: Exclude<TransactionDanger, false> = []
   let genesisHash: string | null = null
@@ -121,7 +69,7 @@ export function decodeTransactions(
 
     const senderStr = txn.sender.toString()
 
-    const decoded: DecodedTransaction = {
+    const decoded: TransactionData = {
       index: i,
       type: txn.type,
       typeLabel: TYPE_LABELS[txn.type] || txn.type,

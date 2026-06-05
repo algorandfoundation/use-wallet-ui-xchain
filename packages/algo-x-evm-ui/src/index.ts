@@ -1,6 +1,9 @@
 // Types
 export type { TransactionData, TransactionDanger, AssetInfo, AssetLookupClient, WalletAdapter, AssetSearchProvider, BridgeWalletAdapter } from './types'
 
+// Transaction Decoder
+export { decodeTransactions } from './utils/decodeTransactions'
+
 // Formatters
 export { formatAssetAmount, assetLabel } from './formatters'
 

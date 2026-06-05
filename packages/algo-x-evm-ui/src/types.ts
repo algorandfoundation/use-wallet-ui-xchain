@@ -1,9 +1,9 @@
 /**
- * Unified transaction data type used by shared UI components.
+ * Unified transaction data type: flat, serializable and display-friendly. 
+ * Used by shared UI components and as a return type of the `decodeTransactions` utility. 
  *
- * Both `DecodedTransaction` (bigint rawAmount) from the React package
- * and `SerializableDecodedTransaction` (string rawAmount) from the extension
- * are structurally compatible with this type.
+ * `SerializableDecodedTransaction` from the liquid-companion-extension
+ * is structurally compatible with this type (string `rawAmount`).
  */
 export interface TransactionData {
   index: number

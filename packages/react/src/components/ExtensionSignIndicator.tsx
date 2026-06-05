@@ -1,5 +1,5 @@
 import { FloatingPortal } from '@floating-ui/react'
-import type { TransactionDanger } from '../utils/decodeTransactions'
+import type { TransactionDanger } from '@d13co/algo-x-evm-ui'
 import { useWalletUI } from '../providers/WalletUIProvider'
 
 interface ExtensionSignIndicatorProps {
