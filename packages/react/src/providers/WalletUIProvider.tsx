@@ -10,7 +10,7 @@ import { ExtensionSignIndicator } from '../components/ExtensionSignIndicator'
 import { WelcomeDialog } from '../components/WelcomeDialog'
 import { useResolvedTheme, type Theme, type ResolvedTheme } from '../hooks/useResolvedTheme'
 import { BridgeDialogProvider } from './BridgeDialogProvider'
-import { decodeTransactions, type TransactionData as DecodedTransaction, type TransactionDanger, NoticeProvider, type NoticesConfig } from '@d13co/algo-x-evm-ui'
+import { decodeTransactions, buildVerifyUrl, type TransactionData as DecodedTransaction, type TransactionDanger, NoticeProvider, type NoticesConfig } from '@d13co/algo-x-evm-ui'
 
 import type { NfdLookupResponse, NfdView } from '../hooks/useNfd'
 import type { UseSwapOptions } from '../hooks/useSwap'
@@ -85,6 +85,8 @@ const lightThemeVars = `
   --wui-color-danger-button-text: #ffffff;
   --wui-color-avatar-bg: #e5e7eb;
   --wui-color-avatar-icon: #9ca3af;
+  --wui-color-verify: #16a34a;
+  --wui-color-verify-text: #ffffff;
 `
 
 const darkThemeVars = `
@@ -108,6 +110,8 @@ const darkThemeVars = `
   --wui-color-danger-button-text: #450a0a;
   --wui-color-avatar-bg: #192a39;
   --wui-color-avatar-icon: #6b7280;
+  --wui-color-verify: #4ade80;
+  --wui-color-verify-text: #052e16;
 `
 
 function injectThemeStyles() {
@@ -163,6 +167,7 @@ interface PendingSignRequest {
   message: string
   genesisHash: string | null
   genesisID: string | null
+  onVerify?: () => void
   resolve: () => void
   reject: (error: Error) => void
 }
@@ -272,6 +277,11 @@ interface WalletUIProviderProps {
    * prop is also passed, it takes precedence.
    */
   swapRouter?: SwapRouterLike
+  /** 
+   * When `true` (default), shows a Verify button on transaction review dialogs
+   * that opens the portal verification page for independent sign-payload confirmation. 
+   */
+  verify?: boolean
 }
 
 // Default query client configuration for NFD queries
@@ -446,6 +456,7 @@ export function WalletUIProvider({
   notices,
   swap,
   swapRouter,
+  verify = true,
 }: WalletUIProviderProps) {
   // Auto-wire swap options from `swapRouter` + wallet signer. Stabilise
   // `signTransactions` via a ref so the built config is stable across renders
@@ -554,12 +565,19 @@ export function WalletUIProvider({
       const messageRaw = AlgoXEvmSdk.getSignPayload(transactions)
       const message = `0x${Buffer.from(messageRaw).toString('hex')}`
 
+      const onVerify = verify
+        ? () => {
+            const txnBytes = transactions.map((txn) => txn.toByte())
+            window.open(buildVerifyUrl(txnBytes), '_blank', 'noopener')
+          }
+        : undefined
+
       const wrappedResolve = () => {
         setSigning(true)
         resolve()
       }
 
-      setPendingSign({ transactions: decodedTransactions, message, dangerous, genesisHash, genesisID, resolve: wrappedResolve, reject })
+      setPendingSign({ transactions: decodedTransactions, message, dangerous, genesisHash, genesisID, onVerify, resolve: wrappedResolve, reject })
       setShowSignDialog(true)
 
       if (extensionDetected) {
@@ -755,7 +773,7 @@ export function WalletUIProvider({
               <ExtensionSignIndicator transactionCount={pendingSign!.transactions.length} dangerous={pendingSign!.dangerous} onReject={handleRejectSign} />
             )}
             {showSignDialog && !extensionDetected && (
-              <BeforeSignDialog transactions={pendingSign!.transactions} message={pendingSign!.message} dangerous={pendingSign!.dangerous} genesisHash={pendingSign!.genesisHash} genesisID={pendingSign!.genesisID} onApprove={handleApproveSign} onReject={handleRejectSign} signing={signing} walletName={(activeWallet?.activeAccount?.metadata?.connectorName as string | undefined) ?? activeWallet?.metadata?.name} walletIcon={(activeWallet?.activeAccount?.metadata?.connectorIcon as string | undefined) ?? activeWallet?.metadata?.icon} algodClient={algodClient} network={activeNetwork} />
+              <BeforeSignDialog transactions={pendingSign!.transactions} message={pendingSign!.message} dangerous={pendingSign!.dangerous} genesisHash={pendingSign!.genesisHash} genesisID={pendingSign!.genesisID} onApprove={handleApproveSign} onReject={handleRejectSign} signing={signing} walletName={(activeWallet?.activeAccount?.metadata?.connectorName as string | undefined) ?? activeWallet?.metadata?.name} walletIcon={(activeWallet?.activeAccount?.metadata?.connectorIcon as string | undefined) ?? activeWallet?.metadata?.icon} algodClient={algodClient} network={activeNetwork} onVerify={pendingSign!.onVerify} />
             )}
             {pendingWelcome && (
               <WelcomeDialog algorandAddress={pendingWelcome.algorandAddress} evmAddress={pendingWelcome.evmAddress} onDismiss={() => setPendingWelcome(null)} />

@@ -4,6 +4,9 @@ export type { TransactionData, TransactionDanger, AssetInfo, AssetLookupClient, 
 // Transaction Decoder
 export { decodeTransactions } from './utils/decodeTransactions'
 
+// Transaction Verify Transport
+export { encodeTxnGroup, decodeTxnGroup, buildVerifyUrl } from './utils/verifyTransport'
+
 // Formatters
 export { formatAssetAmount, assetLabel } from './formatters'
 

@@ -28,9 +28,10 @@ interface BeforeSignDialogProps {
   walletIcon?: string
   algodClient?: AssetLookupClient
   network?: string
+  onVerify?: () => void
 }
 
-export function BeforeSignDialog({ transactions, message, dangerous, genesisHash, genesisID, onApprove, onReject, signing, walletName, walletIcon, algodClient, network }: BeforeSignDialogProps) {
+export function BeforeSignDialog({ transactions, message, dangerous, genesisHash, genesisID, onApprove, onReject, signing, walletName, walletIcon, algodClient, network, onVerify }: BeforeSignDialogProps) {
   const { theme } = useWalletUI()
   const [animationState, setAnimationState] = useState<'starting' | 'entered' | 'exiting' | null>('starting')
 
@@ -118,6 +119,7 @@ export function BeforeSignDialog({ transactions, message, dangerous, genesisHash
                   walletName={walletName}
                   walletIcon={walletIcon}
                   headerAction={closeButton}
+                  onVerify={onVerify}
                 />
               </InfoDialog>
             </div>

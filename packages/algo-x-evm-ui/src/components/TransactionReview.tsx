@@ -1,11 +1,11 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { TransactionFlow } from './TransactionFlow'
 import { TransactionDetail } from './TransactionDetail'
-import { ChevronRight } from './icons'
+import { ChevronRight, ArrowUpRight, Clipboard, Check } from './icons'
 import { Spinner } from './Spinner'
 import { useTransactionData } from '../hooks/useTransactionData'
 import type { TransactionData, TransactionDanger, AssetLookupClient } from '../types'
-import { DOCS_URL } from '../constants'
+import { DOCS_PORTAL_URL } from '../constants'
 
 /** Well-known Algorand network genesis hashes (base64-encoded). */
 const GENESIS_HASH_NETWORK: Record<string, string> = {
@@ -51,6 +51,10 @@ export interface TransactionReviewProps {
   genesisHash?: string | null
   /** Genesis ID string from the transaction group (fallback for LocalNet detection) */
   genesisID?: string | null
+  /** When provided, renders a Verify button in the footer. */
+  onVerify?: () => void
+  /** When true, suppresses the action footer and shows "Verifying" instead of "Signing". */
+  verify?: boolean
 }
 
 export function TransactionReview({
@@ -70,6 +74,8 @@ export function TransactionReview({
   network,
   genesisHash,
   genesisID,
+  onVerify,
+  verify,
 }: TransactionReviewProps) {
   const { loading, assets, appEscrows } = useTransactionData(transactions, {
     algodClient,
@@ -79,6 +85,14 @@ export function TransactionReview({
 
   /** Index into transactions array for detail view, or null for list view */
   const [detailIndex, setDetailIndex] = useState<number | null>(null)
+  const [copied, setCopied] = useState(false)
+
+  function copyMessage() {
+    navigator.clipboard.writeText(message).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    }).catch(() => {})
+  }
 
   // Animate on mount and when returning from detail view
   const [entered, setEntered] = useState(false)
@@ -153,56 +167,61 @@ export function TransactionReview({
       className="flex flex-col transition-all duration-150 ease-in-out data-[state=starting]:opacity-0 data-[state=entered]:opacity-100"
     >
       {/* Header */}
-      <div className="flex items-center justify-between px-6 pt-5 pb-1">
-        <h2 className={`text-lg font-bold ${dangerous ? 'text-[var(--wui-color-danger-text)]' : 'text-[var(--wui-color-text)]'}`}>
-          {dangerous ? 'Review Dangerous ' : 'Review '}
-          Transaction{transactions.length > 1 ? 's' : ''}
-        </h2>
+      <div className={`flex items-center justify-between px-6 ${verify ? 'pt-4' : 'pt-2'} pb-1`}>
+        <div>
+          <h2 className={`text-lg font-bold ${dangerous ? 'text-[var(--wui-color-danger-text)]' : 'text-[var(--wui-color-text)]'}`}>
+            {dangerous ? 'Review Dangerous ' : 'Review '}
+            Transaction{transactions.length > 1 ? 's' : ''}
+          </h2>
+          {/* Origin */}
+          {origin && <div className={`mb-2 mt-0.5 text-xs truncate ${dangerous ? 'text-[var(--wui-color-danger-text)]' : 'text-[var(--wui-color-text)]'}`}>{origin}</div>}
+        </div>
         {headerAction}
       </div>
 
-      {/* Origin (extension shows request origin) */}
-      {origin && <div className="px-6 text-xs text-[var(--wui-color-text-secondary)] truncate">{origin}</div>}
-
       {/* Danger description */}
-      {dangerous ? (
+      {dangerous && (
         <div className="px-6 pb-3 text-sm font-bold text-[var(--wui-color-danger-text)]">
           {renderDangerText()}{' '}
           <a
             className="underline font-normal text-inherit"
             rel="noopener noreferrer"
             target="_blank"
-            href={`${DOCS_URL}/signing-transactions#dangerous-transactions`}
-          >Learn more</a>
-        </div>
-      ) : (
-        <div className="px-6 pb-3 text-sm text-[var(--wui-color-text-secondary)]">
-          {unknownNetwork && (
-            <div className="font-bold text-[var(--wui-color-danger-text)] mb-1">Warning — unknown network genesis hash</div>
-          )}
-          {transactions.length === 1 ? (
-            networkName ? (
-              <>
-                Signing 1 <strong>{networkName}</strong> transaction
-              </>
-            ) : (
-              'Signing 1 transaction'
-            )
-          ) : networkName ? (
-            <>
-              Signing {transactions.length} <strong>{networkName}</strong> transactions
-            </>
-          ) : (
-            `Signing ${transactions.length} transactions`
-          )}.{" "}
-          <a
-              className="text-[var(--wui-color-link)] hover:text-[var(--wui-color-link-hover)]"
-              rel="noopener noreferrer"
-              target="_blank"
-              href={`${DOCS_URL}/signing-transactions`}
-            >Learn more</a>
+            href={`${DOCS_PORTAL_URL}/signing-transactions#dangerous-transactions`}
+          >Learn more<ArrowUpRight size={12} className="inline-block ml-0.5 -mt-0.5" /></a>
         </div>
       )}
+
+      {/* Signing / verifying description */}
+      <div className="px-6 pb-3 text-sm text-[var(--wui-color-text-secondary)]">
+        {unknownNetwork && (
+          <div className="font-bold text-[var(--wui-color-danger-text)] mb-1">Warning — unknown network genesis hash</div>
+        )}
+        {verify ? (
+          <>
+            {transactions.length === 1 ? (
+              networkName ? <>Verifying 1 <strong>{networkName}</strong> transaction.</> : 'Verifying 1 transaction.'
+            ) : (
+              networkName ? <>Verifying {transactions.length} <strong>{networkName}</strong> transactions.</> : `Verifying ${transactions.length} transactions.`
+            )}
+          </>
+        ) : (
+          <>
+            {transactions.length === 1 ? (
+              networkName ? <>Signing 1 <strong>{networkName}</strong> transaction</> : 'Signing 1 transaction'
+            ) : (
+              networkName ? <>Signing {transactions.length} <strong>{networkName}</strong> transactions</> : `Signing ${transactions.length} transactions`
+            )}.{!dangerous && (
+              <>{' '}<a
+                className="text-[var(--wui-color-link)] hover:text-[var(--wui-color-link-hover)]"
+                rel="noopener noreferrer"
+                target="_blank"
+                href={`${DOCS_PORTAL_URL}/signing-transactions`}
+              >Learn more<ArrowUpRight size={12} className="inline-block ml-0.5 -mt-0.5" /></a></>
+            )}
+          </>
+        )}
+      </div>
 
       {/* Transaction list */}
       <div className="px-4 pb-4 max-h-80 overflow-y-auto">
@@ -250,41 +269,69 @@ export function TransactionReview({
       <div className="px-4 pb-4">
         <div className="text-sm flex flex-col gap-2 border border-[var(--wui-color-border)] rounded-xl p-3">
           <div className="flex items-center gap-2">
-            <span>Ensure {walletName} shows this transaction ID:</span>
+            <span>Ensure {walletName ?? 'your wallet'} shows this transaction ID:</span>
           </div>
-          <div className="font-mono break-all text-[var(--wui-color-danger-text)]">{message}</div>
+          <div className="flex items-start gap-2">
+            <div className="font-mono break-all text-[var(--wui-color-danger-text)] flex-1">{message}</div>
+            <button
+              type="button"
+              onClick={copyMessage}
+              className="shrink-0 p-1 rounded-md text-[var(--wui-color-text-secondary)] hover:text-[var(--wui-color-text)] hover:bg-[var(--wui-color-bg-tertiary)] transition-colors mt-0.5"
+              aria-label="Copy transaction ID"
+            >
+              {copied ? <Check size={14} /> : <Clipboard size={14} />}
+            </button>
+          </div>
         </div>
       </div>
 
       {/* Footer */}
-      {signing ? (
-        <div className="px-6 py-4 border-t border-[var(--wui-color-border)]">
-          <div className="flex items-center gap-2 text-sm text-[var(--wui-color-text-secondary)]">
-            <Spinner className="h-4 w-4 flex-shrink-0" />
-            Review in {walletName || 'wallet'}
-            {walletIcon && <img src={walletIcon} alt="" aria-hidden="true" className="h-4 w-4 rounded-sm flex-shrink-0" />}
+      {!verify && (
+        signing ? (
+          <div className="px-6 py-4 border-t border-[var(--wui-color-border)] flex flex-col gap-3">
+            <div className="flex items-center justify-center gap-2 text-sm text-[var(--wui-color-text-secondary)]">
+              <Spinner className="h-4 w-4 flex-shrink-0" />
+              Review in {walletName || 'wallet'}
+              {walletIcon && <img src={walletIcon} alt="" aria-hidden="true" className="h-4 w-4 rounded-sm flex-shrink-0" />}
+            </div>
+            {onVerify && (
+              <button
+                onClick={onVerify}
+                className="w-full py-2.5 px-4 bg-[var(--wui-color-verify)] text-[var(--wui-color-verify-text)] font-medium rounded-xl hover:brightness-90 transition-all text-sm"
+              >
+                Verify
+              </button>
+            )}
           </div>
-        </div>
-      ) : (
-        <div className="px-6 py-4 border-t border-[var(--wui-color-border)] flex gap-3">
-          <button
-            onClick={onReject}
-            className="flex-1 py-2.5 px-4 bg-[var(--wui-color-bg-tertiary)] text-[var(--wui-color-text-secondary)] font-medium rounded-xl hover:brightness-90 transition-all text-sm"
-          >
-            Reject
-          </button>
-          <button
-            onClick={onApprove}
-            className={`flex-1 py-2.5 px-4 font-medium rounded-xl hover:brightness-90 transition-all text-sm flex items-center justify-center gap-2 ${
-              dangerous
-                ? 'bg-[var(--wui-color-danger-text)] text-[var(--wui-color-danger-button-text)]'
-                : 'bg-[var(--wui-color-primary)] text-[var(--wui-color-primary-text)]'
-            }`}
-          >
-            {walletIcon && <img src={walletIcon} alt="" aria-hidden="true" className="h-4 w-4 rounded-sm flex-shrink-0" />}
-            Review
-          </button>
-        </div>
+        ) : (
+          <div className="px-6 py-4 border-t border-[var(--wui-color-border)] flex gap-3">
+            <button
+              onClick={onReject}
+              className="flex-1 py-2.5 px-4 bg-[var(--wui-color-bg-tertiary)] text-[var(--wui-color-text-secondary)] font-medium rounded-xl hover:brightness-90 transition-all text-sm"
+            >
+              Reject
+            </button>
+            {onVerify && (
+              <button
+                onClick={onVerify}
+                className="flex-1 py-2.5 px-4 bg-[var(--wui-color-verify)] text-[var(--wui-color-verify-text)] font-medium rounded-xl hover:brightness-90 transition-all text-sm"
+              >
+                Verify
+              </button>
+            )}
+            <button
+              onClick={onApprove}
+              className={`flex-1 py-2.5 px-4 font-medium rounded-xl hover:brightness-90 transition-all text-sm flex items-center justify-center gap-2 ${
+                dangerous
+                  ? 'bg-[var(--wui-color-danger-text)] text-[var(--wui-color-danger-button-text)]'
+                  : 'bg-[var(--wui-color-primary)] text-[var(--wui-color-primary-text)]'
+              }`}
+            >
+              {walletIcon && <img src={walletIcon} alt="" aria-hidden="true" className="h-4 w-4 rounded-sm flex-shrink-0" />}
+              Review
+            </button>
+          </div>
+        )
       )}
     </div>
   )
