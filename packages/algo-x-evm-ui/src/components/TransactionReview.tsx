@@ -87,11 +87,12 @@ export function TransactionReview({
   const [detailIndex, setDetailIndex] = useState<number | null>(null)
   const [copied, setCopied] = useState(false)
 
-  function copyMessage() {
-    navigator.clipboard.writeText(message).then(() => {
+  async function copyMessage() {
+    try {
+      await navigator.clipboard.writeText(message)
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
-    }).catch(() => {})
+    } catch {}
   }
 
   // Animate on mount and when returning from detail view
