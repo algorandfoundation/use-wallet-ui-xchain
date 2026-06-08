@@ -297,6 +297,7 @@ export function TransactionReview({
             </div>
             {onVerify && (
               <button
+                type="button"
                 onClick={onVerify}
                 className="w-full py-2.5 px-4 bg-[var(--wui-color-verify)] text-[var(--wui-color-verify-text)] font-medium rounded-xl hover:brightness-90 transition-all text-sm"
               >
@@ -314,6 +315,7 @@ export function TransactionReview({
             </button>
             {onVerify && (
               <button
+                type="button"
                 onClick={onVerify}
                 className="flex-1 py-2.5 px-4 bg-[var(--wui-color-verify)] text-[var(--wui-color-verify-text)] font-medium rounded-xl hover:brightness-90 transition-all text-sm"
               >
