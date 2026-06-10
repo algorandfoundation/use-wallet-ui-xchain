@@ -30,14 +30,19 @@ export function encodeTxnGroup(txnBytes: Uint8Array[]): string {
 }
 
 /**
- * Decode a base64url-encoded txn group string back into per-txn msgpack 
+ * Decode a base64url-encoded txn group string back into per-txn msgpack
  * byte arrays. Inverse of `encodeTxnGroup`.
+ *
+ * Throws if `payload` is empty or malformed. Consumers should handle decode
+ * failures with try/catch.
  */
 export function decodeTxnGroup(payload: string): Uint8Array[] {
-  if (!payload) return []
-  return payload
-    .split(':')
-    .map((part) => Uint8Array.from(atob(fromBase64Url(part)), (c) => c.charCodeAt(0)))
+  if (!payload) throw new Error('Transaction payload is empty')
+
+  return payload.split(':').map((part) => {
+    if (!part) throw new Error('Transaction payload contains an empty transaction')
+    return Uint8Array.from(atob(fromBase64Url(part)), (c) => c.charCodeAt(0))
+  })
 }
 
 /**
