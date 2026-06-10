@@ -270,7 +270,11 @@ export function TransactionReview({
       <div className="px-4 pb-4">
         <div className="text-sm flex flex-col gap-2 border border-[var(--wui-color-border)] rounded-xl p-3">
           <div className="flex items-center gap-2">
-            <span>Ensure {walletName ?? 'your wallet'} shows this transaction ID:</span>
+            <span>
+              {verifyDisplayMode
+                ? `Compare this transaction ${transactions.length > 1 ? 'group ' : ''}ID with the one shown by your wallet before signing:`
+                : `Ensure ${walletName ?? 'your wallet'} shows this transaction ${transactions.length > 1 ? 'group ' : ''}ID:`}
+            </span>
           </div>
           <div className="flex items-start gap-2">
             <div className="font-mono break-all text-[var(--wui-color-danger-text)] flex-1">{message}</div>
