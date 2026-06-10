@@ -280,7 +280,7 @@ export function TransactionReview({
               className="shrink-0 p-1 rounded-md text-[var(--wui-color-text-secondary)] hover:text-[var(--wui-color-text)] hover:bg-[var(--wui-color-bg-tertiary)] transition-colors mt-0.5"
               aria-label="Copy transaction ID"
             >
-              {copied ? <Check size={14} /> : <Clipboard size={14} />}
+              {copied ? <Check size={14} className="text-green-500" /> : <Clipboard size={14} />}
             </button>
           </div>
         </div>
