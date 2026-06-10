@@ -48,8 +48,8 @@
     --wui-color-bg-tertiary: #192a39;
     --wui-color-bg-hover: #192a39;
     --wui-color-text: #e9e9fd;
-    --wui-color-text-secondary: #b0b8c1;
-    --wui-color-text-tertiary: #8b95a3;
+    --wui-color-text-secondary: #99a1a7;
+    --wui-color-text-tertiary: #6b7280;
     --wui-color-border: #192a39;
     --wui-color-link: #6c6cf1;
     --wui-color-link-hover: #8080f3;
@@ -59,7 +59,7 @@
     --wui-color-danger-text: #fca5a5;
     --wui-color-danger-button-text: #450a0a;
     --wui-color-avatar-bg: #192a39;
-    --wui-color-avatar-icon: #8b95a3;
+    --wui-color-avatar-icon: #6b7280;
     --wui-color-verify: #4ade80;
     --wui-color-verify-text: #052e16;
   }
@@ -74,8 +74,8 @@
     --wui-color-bg-tertiary: #192a39;
     --wui-color-bg-hover: #192a39;
     --wui-color-text: #e9e9fd;
-    --wui-color-text-secondary: #b0b8c1;
-    --wui-color-text-tertiary: #8b95a3;
+    --wui-color-text-secondary: #99a1a7;
+    --wui-color-text-tertiary: #6b7280;
     --wui-color-border: #192a39;
     --wui-color-link: #6c6cf1;
     --wui-color-link-hover: #8080f3;
@@ -85,7 +85,7 @@
     --wui-color-danger-text: #fca5a5;
     --wui-color-danger-button-text: #450a0a;
     --wui-color-avatar-bg: #192a39;
-    --wui-color-avatar-icon: #8b95a3;
+    --wui-color-avatar-icon: #6b7280;
     --wui-color-verify: #4ade80;
     --wui-color-verify-text: #052e16;
   }
@@ -101,8 +101,8 @@
       --wui-color-bg-tertiary: #192a39;
       --wui-color-bg-hover: #192a39;
       --wui-color-text: #e9e9fd;
-      --wui-color-text-secondary: #b0b8c1;
-      --wui-color-text-tertiary: #8b95a3;
+      --wui-color-text-secondary: #99a1a7;
+      --wui-color-text-tertiary: #6b7280;
       --wui-color-border: #192a39;
       --wui-color-link: #6c6cf1;
       --wui-color-link-hover: #8080f3;
@@ -112,7 +112,7 @@
       --wui-color-danger-text: #fca5a5;
       --wui-color-danger-button-text: #450a0a;
       --wui-color-avatar-bg: #192a39;
-      --wui-color-avatar-icon: #8b95a3;
+      --wui-color-avatar-icon: #6b7280;
       --wui-color-verify: #4ade80;
       --wui-color-verify-text: #052e16;
     }
