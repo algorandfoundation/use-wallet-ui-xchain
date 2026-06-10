@@ -272,8 +272,10 @@ export function TransactionReview({
           <div className="flex items-center gap-2">
             <span>
               {verifyDisplayMode
-                ? `Compare this transaction ${transactions.length > 1 ? 'group ' : ''}ID with the one shown by your wallet before signing:`
-                : `Ensure ${walletName ?? 'your wallet'} shows this transaction ${transactions.length > 1 ? 'group ' : ''}ID:`}
+                ? transactions.length > 1
+                  ? 'Resulting transaction group ID:'
+                  : 'Resulting transaction ID:'
+                : `Ensure ${walletName ?? 'your wallet'} shows this transaction ID:`}
             </span>
           </div>
           <div className="flex items-start gap-2">
@@ -288,6 +290,11 @@ export function TransactionReview({
             </button>
           </div>
         </div>
+        {verifyDisplayMode && (
+          <div className="text-sm text-[var(--wui-color-text-secondary)] px-2 mt-2">
+            Ensure it matches the one shown by your wallet before signing.
+          </div>
+        )}
       </div>
 
       {/* Footer */}
