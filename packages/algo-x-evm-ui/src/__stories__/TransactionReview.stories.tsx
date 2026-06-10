@@ -194,3 +194,22 @@ export const UnknownNetwork: Story = {
   },
 }
 
+// When WalletUIProvider prop `verify={false}`: no `onVerify`, so the footer omits the Verify button entirely.
+export const NoVerifyButton: Story = {
+  args: {
+    transactions: mocks.singlePayment(),
+    genesisHash: TESTNET_GENESIS_HASH,
+    onVerify: undefined,
+  },
+}
+
+export const SigningWithoutVerify: Story = {
+  args: {
+    transactions: mocks.singlePayment(),
+    signing: true,
+    walletName: 'Pera Wallet',
+    genesisHash: TESTNET_GENESIS_HASH,
+    onVerify: undefined,
+  },
+}
+

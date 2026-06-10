@@ -40,6 +40,8 @@ export interface TransactionReviewProps {
   getApplicationAddress?: (appId: number) => { toString(): string }
   onApprove: () => void
   onReject: () => void
+  /** Verify handler - when provided, renders the Verify button in the footer. */
+  onVerify?: () => void
   signing?: boolean
   walletName?: string
   walletIcon?: string
@@ -51,10 +53,8 @@ export interface TransactionReviewProps {
   genesisHash?: string | null
   /** Genesis ID string from the transaction group (fallback for LocalNet detection) */
   genesisID?: string | null
-  /** When provided, renders a Verify button in the footer. */
-  onVerify?: () => void
-  /** When true, suppresses the action footer and shows "Verifying" instead of "Signing". */
-  verify?: boolean
+  /** Read-only mode to display on verify view - suppresses the action footer and more. */
+  verifyDisplayMode?: boolean
 }
 
 export function TransactionReview({
@@ -75,7 +75,7 @@ export function TransactionReview({
   genesisHash,
   genesisID,
   onVerify,
-  verify,
+  verifyDisplayMode,
 }: TransactionReviewProps) {
   const { loading, assets, appEscrows } = useTransactionData(transactions, {
     algodClient,
@@ -168,7 +168,7 @@ export function TransactionReview({
       className="flex flex-col transition-all duration-150 ease-in-out data-[state=starting]:opacity-0 data-[state=entered]:opacity-100"
     >
       {/* Header */}
-      <div className={`flex items-center justify-between px-6 ${verify ? 'pt-4' : 'pt-2'} pb-1`}>
+      <div className={`flex items-center justify-between px-6 ${verifyDisplayMode ? 'pt-4' : 'pt-2'} pb-1`}>
         <div>
           <h2 className={`text-lg font-bold ${dangerous ? 'text-[var(--wui-color-danger-text)]' : 'text-[var(--wui-color-text)]'}`}>
             {dangerous ? 'Review Dangerous ' : 'Review '}
@@ -198,7 +198,7 @@ export function TransactionReview({
         {unknownNetwork && (
           <div className="font-bold text-[var(--wui-color-danger-text)] mb-1">Warning — unknown network genesis hash</div>
         )}
-        {verify ? (
+        {verifyDisplayMode ? (
           <>
             {transactions.length === 1 ? (
               networkName ? <>Verifying 1 <strong>{networkName}</strong> transaction.</> : 'Verifying 1 transaction.'
@@ -287,7 +287,7 @@ export function TransactionReview({
       </div>
 
       {/* Footer */}
-      {!verify && (
+      {!verifyDisplayMode && (
         signing ? (
           <div className="px-6 py-4 border-t border-[var(--wui-color-border)] flex flex-col gap-3">
             <div className="flex items-center justify-center gap-2 text-sm text-[var(--wui-color-text-secondary)]">
