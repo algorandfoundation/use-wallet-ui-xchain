@@ -290,11 +290,6 @@ export function TransactionReview({
             </button>
           </div>
         </div>
-        {verifyDisplayMode && (
-          <div className="text-sm text-[var(--wui-color-text-secondary)] px-2 mt-2">
-            Ensure it matches the one shown by your wallet before signing.
-          </div>
-        )}
       </div>
 
       {/* Footer */}
