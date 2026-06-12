@@ -118,11 +118,13 @@ export function ManagePanel({
   const accountSwitcherRef = useRef<HTMLDivElement>(null)
   const hasAccountSwitcher = !!(accounts && accounts.length > 1 && onAccountSwitch)
 
-  const handleCopyAddress = useCallback(() => {
+  const handleCopyAddress = useCallback(async () => {
     if (!activeAddress) return
-    navigator.clipboard.writeText(activeAddress)
-    setIsCopied(true)
-    setTimeout(() => setIsCopied(false), 2000)
+    try {
+      await navigator.clipboard.writeText(activeAddress)
+      setIsCopied(true)
+      setTimeout(() => setIsCopied(false), 2000)
+    } catch {}
   }, [activeAddress])
 
   const goForward = useCallback((target: 'send' | 'opt-in' | 'bridge' | 'swap' | 'add-to-wallet') => {

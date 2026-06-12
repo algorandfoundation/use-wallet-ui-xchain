@@ -3,25 +3,27 @@ import { TransactionReview } from '../components/TransactionReview'
 import * as mocks from './mocks'
 
 const TESTNET_GENESIS_HASH = 'SGO1GKSzyE7IEPItTxCByw9x8FmnrCDexi9/cOUJOiI='
+const MAINNET_GENESIS_HASH = 'wGHE2Pwdvd7S12BL5FaOP20EGYesN73ktiC1qzkkit8='
+const UNKNOWN_GENESIS_HASH = 'dW5rbm93bmdlbmVzaXNoYXNoYmFzZTY0ZW5jb2RlZA=='
 
-// Inline SVG data URL so stories don't need network access to render a wallet icon.
-const SAMPLE_WALLET_ICON =
-  'data:image/svg+xml;utf8,' +
-  encodeURIComponent(
-    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="8" fill="%23FFB800"/><path d="M10 22l4-12h4l4 12h-3l-.8-2.5h-4.4L13 22h-3zm5.2-5h2.6l-1.3-4-1.3 4z" fill="%23000"/></svg>',
-  )
+const mockAlgodClient = {
+  getAssetByID: (id: number) => ({
+    do: async () => {
+      if (id === 31566704) return { params: { decimals: 6, name: 'USD Coin', unitName: 'USDC' } }
+      if (id === 312769) return { params: { decimals: 6, name: 'Tether USDt', unitName: 'USDt' } }
+      return { params: { decimals: 0 } }
+    },
+  }),
+}
 
 const meta: Meta<typeof TransactionReview> = {
-  title: 'TransactionReview',
+  title: 'TransactionReview (verifyDisplayMode)',
   component: TransactionReview,
   args: {
     message: '0xa1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2',
     dangerous: false,
-    walletName: 'Pera Wallet',
-    walletIcon: SAMPLE_WALLET_ICON,
-    onApprove: () => console.log('approved'),
-    onReject: () => console.log('rejected'),
-    onVerify: () => console.log('verify clicked'),
+    verifyDisplayMode: true,
+    origin: 'https://dapp.example.com',
   },
 }
 
@@ -42,55 +44,9 @@ export const GroupOfTwoPayments: Story = {
   },
 }
 
-export const RekeyTransaction: Story = {
+export const LargePaymentGroup: Story = {
   args: {
-    transactions: mocks.rekeyTransaction(),
-    dangerous: ['rekey'],
-    genesisHash: TESTNET_GENESIS_HASH,
-  },
-}
-
-export const CloseOutTransaction: Story = {
-  args: {
-    transactions: mocks.closeOutTransaction(),
-    dangerous: ['closeTo'],
-    genesisHash: TESTNET_GENESIS_HASH,
-  },
-}
-
-const mockAlgodClient = {
-  getAssetByID: (id: number) => ({
-    do: async () => {
-      if (id === 31566704) return { params: { decimals: 6, name: 'USD Coin', unitName: 'USDC' } }
-      if (id === 312769) return { params: { decimals: 6, name: 'Tether USDt', unitName: 'USDt' } }
-      return { params: { decimals: 0 } }
-    },
-  }),
-}
-
-export const ThreeStackedDangerous: Story = {
-  args: {
-    transactions: mocks.threeStackedDangerousGroup(),
-    dangerous: ['rekey', 'closeTo'],
-    algodClient: mockAlgodClient,
-    genesisHash: TESTNET_GENESIS_HASH,
-  },
-}
-
-export const MixedDangerousGroup: Story = {
-  args: {
-    transactions: mocks.mixedDangerousGroup(),
-    dangerous: ['rekey', 'closeTo'],
-    algodClient: mockAlgodClient,
-    genesisHash: TESTNET_GENESIS_HASH,
-  },
-}
-
-export const TwoAssetClosings: Story = {
-  args: {
-    transactions: mocks.twoAssetClosingsGroup(),
-    dangerous: ['closeTo', 'closeTo'],
-    algodClient: mockAlgodClient,
+    transactions: mocks.largePaymentGroup(),
     genesisHash: TESTNET_GENESIS_HASH,
   },
 }
@@ -130,35 +86,53 @@ export const MixedGroup: Story = {
   },
 }
 
-export const LargePaymentGroup: Story = {
+export const MainNet: Story = {
   args: {
-    transactions: mocks.largePaymentGroup(),
+    transactions: mocks.singlePayment().map((t) => ({ ...t, genesisID: 'mainnet-v1.0', genesisHash: MAINNET_GENESIS_HASH })),
+    genesisHash: MAINNET_GENESIS_HASH,
+    genesisID: 'mainnet-v1.0',
+  },
+}
+
+export const RekeyTransaction: Story = {
+  args: {
+    transactions: mocks.rekeyTransaction(),
+    dangerous: ['rekey'],
     genesisHash: TESTNET_GENESIS_HASH,
   },
 }
 
-export const Signing: Story = {
+export const CloseOutTransaction: Story = {
   args: {
-    transactions: mocks.singlePayment(),
-    signing: true,
-    walletName: 'Pera Wallet',
-    genesisHash: TESTNET_GENESIS_HASH,
-    onVerify: () => console.log('verify clicked'),
-  },
-}
-
-export const WithOrigin: Story = {
-  args: {
-    transactions: mocks.singlePayment(),
-    origin: 'https://dapp.example.com',
+    transactions: mocks.closeOutTransaction(),
+    dangerous: ['closeTo'],
     genesisHash: TESTNET_GENESIS_HASH,
   },
 }
 
-export const PayloadVerificationFailed: Story = {
+export const ThreeStackedDangerous: Story = {
   args: {
-    transactions: mocks.singlePayment(),
-    payloadVerified: false,
+    transactions: mocks.threeStackedDangerousGroup(),
+    dangerous: ['rekey', 'closeTo'],
+    algodClient: mockAlgodClient,
+    genesisHash: TESTNET_GENESIS_HASH,
+  },
+}
+
+export const MixedDangerousGroup: Story = {
+  args: {
+    transactions: mocks.mixedDangerousGroup(),
+    dangerous: ['rekey', 'closeTo'],
+    algodClient: mockAlgodClient,
+    genesisHash: TESTNET_GENESIS_HASH,
+  },
+}
+
+export const TwoAssetClosings: Story = {
+  args: {
+    transactions: mocks.twoAssetClosingsGroup(),
+    dangerous: ['closeTo', 'closeTo'],
+    algodClient: mockAlgodClient,
     genesisHash: TESTNET_GENESIS_HASH,
   },
 }
@@ -190,26 +164,14 @@ export const BinaryNote: Story = {
 export const UnknownNetwork: Story = {
   args: {
     transactions: mocks.singlePayment(),
-    genesisHash: 'dW5rbm93bmdlbmVzaXNoYXNoYmFzZTY0ZW5jb2RlZA==',
+    genesisHash: UNKNOWN_GENESIS_HASH,
   },
 }
 
-// When WalletUIProvider prop `verify={false}`: no `onVerify`, so the footer omits the Verify button entirely.
-export const NoVerifyButton: Story = {
+export const NoOrigin: Story = {
   args: {
     transactions: mocks.singlePayment(),
     genesisHash: TESTNET_GENESIS_HASH,
-    onVerify: undefined,
+    origin: undefined,
   },
 }
-
-export const SigningWithoutVerify: Story = {
-  args: {
-    transactions: mocks.singlePayment(),
-    signing: true,
-    walletName: 'Pera Wallet',
-    genesisHash: TESTNET_GENESIS_HASH,
-    onVerify: undefined,
-  },
-}
-

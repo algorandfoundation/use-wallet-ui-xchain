@@ -1,6 +1,6 @@
 import { CopyButton } from './CopyButton'
 import { XFilled } from './icons'
-import { DOCS_URL } from '../constants'
+import { DOCS_PORTAL_URL } from '../constants'
 
 export interface WelcomeContentProps {
   algorandAddress: string
@@ -53,7 +53,7 @@ export function WelcomeContent({
             className="text-[var(--wui-color-link)] hover:text-[var(--wui-color-link-hover)]"
             rel="noopener noreferrer"
             target="_blank"
-            href={`${DOCS_URL}/what-is-algo-x-evm`}
+            href={`${DOCS_PORTAL_URL}/what-is-algo-x-evm`}
           >
             Learn more.
           </a>

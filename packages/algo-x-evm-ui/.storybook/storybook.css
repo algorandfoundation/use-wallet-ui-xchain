@@ -23,6 +23,8 @@
   --wui-color-danger-button-text: #ffffff;
   --wui-color-avatar-bg: #e5e7eb;
   --wui-color-avatar-icon: #9ca3af;
+  --wui-color-verify: #16a34a;
+  --wui-color-verify-text: #ffffff;
 }
 
 /* Dark mode via data-theme attribute */
@@ -47,4 +49,6 @@
   --wui-color-danger-button-text: #450a0a;
   --wui-color-avatar-bg: #192a39;
   --wui-color-avatar-icon: #6b7280;
+  --wui-color-verify: #4ade80;
+  --wui-color-verify-text: #052e16;
 }
