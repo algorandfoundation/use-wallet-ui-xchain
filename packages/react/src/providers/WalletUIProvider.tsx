@@ -36,7 +36,7 @@ const EXT_SOURCE = {
 // Pending sign request persisted when an in-app webview reloads.
 // Stored in localStorage as sessionStorage doesn't survive webview teardown.
 const PENDING_SIGN_KEY = 'wui:pending-sign-restore'
-const PENDING_SIGN_TTL_MS = 1 * 60 * 1000 // 1 minute
+const PENDING_SIGN_TTL_MS = 2 * 60 * 1000 // 2 minutes
 
 /**
  * Value of `PENDING_SIGN_KEY` in `localStorage`.
