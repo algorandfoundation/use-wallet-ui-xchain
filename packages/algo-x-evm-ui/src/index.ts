@@ -6,6 +6,7 @@ export { decodeTransactions } from './utils/decodeTransactions'
 
 // Transaction Verify Transport
 export { encodeTxnGroup, decodeTxnGroup, buildVerifyUrl } from './utils/verifyTransport'
+export { isWalletInAppBrowser } from './utils/browserEnv'
 
 // Formatters
 export { formatAssetAmount, assetLabel } from './formatters'

@@ -10,7 +10,7 @@ import { ExtensionSignIndicator } from '../components/ExtensionSignIndicator'
 import { WelcomeDialog } from '../components/WelcomeDialog'
 import { useResolvedTheme, type Theme, type ResolvedTheme } from '../hooks/useResolvedTheme'
 import { BridgeDialogProvider } from './BridgeDialogProvider'
-import { decodeTransactions, buildVerifyUrl, type TransactionData as DecodedTransaction, type TransactionDanger, NoticeProvider, type NoticesConfig } from '@d13co/algo-x-evm-ui'
+import { decodeTransactions, buildVerifyUrl, encodeTxnGroup, decodeTxnGroup, isWalletInAppBrowser, type TransactionData as DecodedTransaction, type TransactionDanger, NoticeProvider, type NoticesConfig } from '@d13co/algo-x-evm-ui'
 
 import type { NfdLookupResponse, NfdView } from '../hooks/useNfd'
 import type { UseSwapOptions } from '../hooks/useSwap'
@@ -32,6 +32,28 @@ const EXT_SOURCE = {
   CONTENT: 'liquid-wallet-companion-content',
   POPUP: 'liquid-wallet-companion-popup',
 } as const
+
+// Pending sign request persisted when an in-app webview reloads.
+// Stored in localStorage as sessionStorage doesn't survive webview teardown.
+const PENDING_SIGN_KEY = 'wui:pending-sign-restore'
+const PENDING_SIGN_TTL_MS = 1 * 60 * 1000 // 1 minute
+
+/**
+ * Value of `PENDING_SIGN_KEY` in `localStorage`.
+ * @encodedTxns Group encoded via `encodeTxnGroup` (same base64url encode/decode as the verify URL).
+ */
+interface PersistedSignRequest {
+  encodedTxns: string
+  timestamp: number
+}
+
+function clearPersistedSign() {
+  try {
+    localStorage.removeItem(PENDING_SIGN_KEY)
+  } catch {
+    // ignore
+  }
+}
 
 interface SerializableDecodedTransaction {
   index: number
@@ -167,7 +189,12 @@ interface PendingSignRequest {
   message: string
   genesisHash: string | null
   genesisID: string | null
-  onVerify?: () => void
+  /** Portal URL for independent review of the transaction group before signing. */
+  verifyUrl?: string
+  /** True when this request was restored from localStorage after a page reload. */
+  restored?: boolean
+  /** False for partial signs (e.g. swap) that can't be persisted/restored. */
+  restorable?: boolean
   resolve: () => void
   reject: (error: Error) => void
 }
@@ -546,6 +573,7 @@ export function WalletUIProvider({
         // Keep pendingRequestIdRef so requestAfterSign can send SIGN_COMPLETE
         pendingSign?.resolve()
       } else {
+        clearPersistedSign() // defensive
         pendingSign?.reject(new Error('User rejected signing from extension'))
         setPendingSign(null)
         pendingRequestIdRef.current = null
@@ -558,27 +586,48 @@ export function WalletUIProvider({
   }, [extensionDetected, pendingSign])
 
   const networkConfigRef = useRef<typeof activeNetworkConfig>(undefined)
+  // Skip showing the sign dialog again after the restore effect has already shown it.
+  const skipBeforeSignRef = useRef(false)
+  // Raw txn bytes for a sign request restored from localStorage, used by triggerRestoredSign.
+  const restoredTxnsRef = useRef<Uint8Array[] | null>(null)
 
-  const requestBeforeSign = useCallback((txnGroup: algosdk.Transaction[] | Uint8Array[]) => {
+  const requestBeforeSign = useCallback((txnGroup: algosdk.Transaction[] | Uint8Array[], indexesToSign?: number[]) => {
     return new Promise<void>((resolve, reject) => {
+      if (skipBeforeSignRef.current) {
+        resolve()
+        return
+      }
+
       const { decodedTransactions, transactions, dangerous, genesisHash, genesisID } = decodeTransactions(txnGroup)
       const messageRaw = AlgoXEvmSdk.getSignPayload(transactions)
       const message = `0x${Buffer.from(messageRaw).toString('hex')}`
 
-      const onVerify = verify
-        ? () => {
-            const txnBytes = transactions.map((txn) => txn.toByte())
-            window.open(buildVerifyUrl(txnBytes), '_blank', 'noopener')
-          }
-        : undefined
+      const txnBytes = transactions.map((txn) => txn.toByte())
+      const verifyUrl = verify ? buildVerifyUrl(txnBytes) : undefined
+
+      // Only full-group signs are restorable
+      const restorable = !indexesToSign || txnBytes.every((_, i) => indexesToSign.includes(i))
 
       const wrappedResolve = () => {
         setSigning(true)
         resolve()
       }
 
-      setPendingSign({ transactions: decodedTransactions, message, dangerous, genesisHash, genesisID, onVerify, resolve: wrappedResolve, reject })
+      setPendingSign({ transactions: decodedTransactions, message, dangerous, genesisHash, genesisID, verifyUrl, restorable, resolve: wrappedResolve, reject })
       setShowSignDialog(true)
+
+      // Persist so the request can be restored on embedded browser reloads - in particular, for the verify flow.
+      if (isWalletInAppBrowser() && restorable) {
+        try {
+          const persisted: PersistedSignRequest = {
+            encodedTxns: encodeTxnGroup(txnBytes),
+            timestamp: Date.now(),
+          }
+          localStorage.setItem(PENDING_SIGN_KEY, JSON.stringify(persisted))
+        } catch {
+          // ignore - best-effort
+        }
+      }
 
       if (extensionDetected) {
         const requestId = crypto.randomUUID()
@@ -623,6 +672,7 @@ export function WalletUIProvider({
   }, [extensionDetected])
 
   const requestAfterSign = useCallback((_success: boolean, _errorMessage?: string) => {
+    clearPersistedSign()
     if (extensionDetected && pendingRequestIdRef.current) {
       window.postMessage(
         {
@@ -650,6 +700,8 @@ export function WalletUIProvider({
   const manager = useWalletManager()
   const { algodClient, activeWallet } = useWallet()
   const { activeNetwork, activeNetworkConfig } = useNetwork()
+  const algodClientRef = useRef(algodClient)
+  algodClientRef.current = algodClient
 
   // RainbowKit integration: inject getEvmAccounts into the wallet instance
   useEffect(() => {
@@ -677,6 +729,100 @@ export function WalletUIProvider({
       )
     }
   }, [manager, effectiveRainbowkit, wagmiConfig, rainbowkit])
+
+  /**
+   * Resumes a sign request restored from localStorage.
+   * The restore effect already showed the review dialog, so this calls
+   * `signTransactions` with the before-sign dialog temporarily bypassed,
+   * then submits the signed transactions.
+   */
+  const triggerRestoredSign = useCallback(async () => {
+    const txns = restoredTxnsRef.current
+    if (!txns) return
+
+    try {
+      skipBeforeSignRef.current = true
+      let signedTxns: (Uint8Array | null)[]
+
+      try {
+        signedTxns = await signTransactionsRef.current(txns)
+      } finally {
+        skipBeforeSignRef.current = false
+      }
+
+      const toSubmit = signedTxns.filter((s): s is Uint8Array => !!s)
+      if (toSubmit.length === 0) {
+        throw new Error('Restored sign request produced no signed transactions')
+      }
+      if (!algodClientRef.current) {
+        throw new Error('Algod client is not available for restored request submission')
+      }
+
+      const { txid } = await algodClientRef.current.sendRawTransaction(toSubmit).do()
+      console.info('[WalletUI] Restored transaction submitted:', txid)
+
+      clearPersistedSign()
+      restoredTxnsRef.current = null
+      setSigning(false)
+      setPendingSign(null)
+      setShowSignDialog(false)
+    } catch (err) {
+      skipBeforeSignRef.current = false
+      setSigning(false)
+      console.error('[WalletUI] Failed to complete restored signing request:', err)
+    }
+  }, [])
+
+  // ----- Restore effect ------
+  // Restore any valid pending sign request left by an in-app browser navigation on reload.
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(PENDING_SIGN_KEY)
+      if (!stored) return
+
+      const persisted: PersistedSignRequest = JSON.parse(stored)
+      if (Date.now() - persisted.timestamp > PENDING_SIGN_TTL_MS) {
+        clearPersistedSign()
+        return
+      }
+
+      const txnBytes = decodeTxnGroup(persisted.encodedTxns)
+      restoredTxnsRef.current = txnBytes
+
+      // Signal that a pending sign was restored after a reload
+      console.info(`[WalletUI] Restored pending sign request (${Math.round((Date.now() - persisted.timestamp) / 1000)}s old)`)
+
+      // Re-derive all data from the raw transaction(s)
+      const { decodedTransactions, transactions, dangerous, genesisHash, genesisID } = decodeTransactions(txnBytes)
+      const messageRaw = AlgoXEvmSdk.getSignPayload(transactions)
+      const message = `0x${Buffer.from(messageRaw).toString('hex')}`
+      const verifyUrl = verify ? buildVerifyUrl(txnBytes) : undefined
+
+      setPendingSign({
+        transactions: decodedTransactions,
+        message,
+        dangerous,
+        genesisHash,
+        genesisID,
+        verifyUrl,
+        restored: true,
+        restorable: true,
+        resolve: () => {
+          setSigning(true)
+          void triggerRestoredSign()
+        },
+        reject: () => {
+          clearPersistedSign()
+          restoredTxnsRef.current = null
+          setPendingSign(null)
+          setShowSignDialog(false)
+        },
+      })
+      setShowSignDialog(true)
+    } catch {
+      clearPersistedSign()
+    }
+  }, [])
 
   // Keep wallet name and network config in refs so requestBeforeSign doesn't depend on them
   const walletNameRef = useRef<string | undefined>(undefined)
@@ -717,6 +863,7 @@ export function WalletUIProvider({
   }, [pendingSign])
 
   const handleRejectSign = useCallback(() => {
+    clearPersistedSign()
     if (extensionDetected && pendingRequestIdRef.current) {
       window.postMessage(
         {
@@ -773,7 +920,7 @@ export function WalletUIProvider({
               <ExtensionSignIndicator transactionCount={pendingSign!.transactions.length} dangerous={pendingSign!.dangerous} onReject={handleRejectSign} />
             )}
             {showSignDialog && !extensionDetected && (
-              <BeforeSignDialog transactions={pendingSign!.transactions} message={pendingSign!.message} dangerous={pendingSign!.dangerous} genesisHash={pendingSign!.genesisHash} genesisID={pendingSign!.genesisID} onApprove={handleApproveSign} onReject={handleRejectSign} signing={signing} walletName={(activeWallet?.activeAccount?.metadata?.connectorName as string | undefined) ?? activeWallet?.metadata?.name} walletIcon={(activeWallet?.activeAccount?.metadata?.connectorIcon as string | undefined) ?? activeWallet?.metadata?.icon} algodClient={algodClient} network={activeNetwork} onVerify={pendingSign!.onVerify} />
+              <BeforeSignDialog transactions={pendingSign!.transactions} message={pendingSign!.message} dangerous={pendingSign!.dangerous} genesisHash={pendingSign!.genesisHash} genesisID={pendingSign!.genesisID} onApprove={handleApproveSign} onReject={handleRejectSign} signing={signing} walletName={(activeWallet?.activeAccount?.metadata?.connectorName as string | undefined) ?? activeWallet?.metadata?.name} walletIcon={(activeWallet?.activeAccount?.metadata?.connectorIcon as string | undefined) ?? activeWallet?.metadata?.icon} algodClient={algodClient} network={activeNetwork} verifyUrl={pendingSign!.verifyUrl} restored={pendingSign!.restored} restorable={pendingSign!.restorable} />
             )}
             {pendingWelcome && (
               <WelcomeDialog algorandAddress={pendingWelcome.algorandAddress} evmAddress={pendingWelcome.evmAddress} onDismiss={() => setPendingWelcome(null)} />
