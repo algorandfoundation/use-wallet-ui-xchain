@@ -181,6 +181,15 @@ export function List(props: IconProps) {
   )
 }
 
+export function Eye(props: IconProps) {
+  return (
+    <StrokeIcon {...props}>
+      <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+      <circle cx="12" cy="12" r="3" />
+    </StrokeIcon>
+  )
+}
+
 export function VerifiedBadge({ size = 14, className = 'inline-block ml-1 -mt-0.5' }: IconProps) {
   return (
     <svg

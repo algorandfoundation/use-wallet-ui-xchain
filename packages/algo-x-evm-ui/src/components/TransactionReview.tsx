@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { TransactionFlow } from './TransactionFlow'
 import { TransactionDetail } from './TransactionDetail'
-import { ChevronRight, ArrowUpRight, Clipboard, Check } from './icons'
+import { ChevronRight, ArrowUpRight, Clipboard, Check, Eye } from './icons'
 import { Spinner } from './Spinner'
 import { useTransactionData } from '../hooks/useTransactionData'
 import type { TransactionData, TransactionDanger, AssetLookupClient } from '../types'
@@ -32,6 +32,14 @@ function resolveNetworkName(genesisHash: string | null | undefined, genesisID: s
     return 'LocalNet'
   }
   return null
+}
+
+/**
+ * Split a hex id into 4-char groups for chunked display. Strips an optional `0x` prefix. 
+ */
+function chunkHexId(value: string): string[] {
+  const hex = value.startsWith('0x') ? value.slice(2) : value
+  return hex.match(/.{1,4}/g) ?? []
 }
 
 export interface TransactionReviewProps {
@@ -94,6 +102,7 @@ export function TransactionReview({
   /** Index into transactions array for detail view, or null for list view */
   const [detailIndex, setDetailIndex] = useState<number | null>(null)
   const [copied, setCopied] = useState(false)
+  const [chunkTxId, setChunkTxId] = useState(false)
 
   const embeddedBrowser = isWalletInAppBrowser()
   const verifyBlocked = embeddedBrowser && restorable === false
@@ -297,8 +306,8 @@ export function TransactionReview({
 
       {/* Sign payload */}
       <div className="px-4 pb-4">
-        <div className="text-sm flex flex-col gap-2 border border-[var(--wui-color-border)] rounded-xl p-3">
-          <div className="flex items-center gap-2">
+        <div className="relative text-sm flex items-center gap-2 border border-[var(--wui-color-border)] rounded-xl p-3">
+          <div className="flex-1 min-w-0 flex flex-col gap-2 pr-7">
             <span>
               {verifyDisplayMode
                 ? transactions.length > 1
@@ -306,20 +315,41 @@ export function TransactionReview({
                   : 'Resulting transaction ID:'
                 : `Ensure ${walletName ?? 'your wallet'} shows this transaction ID:`}
             </span>
+            <div className="font-mono break-all text-[var(--wui-color-danger-text)] select-all">
+              {chunkTxId ? (
+                <div className="grid grid-cols-[repeat(auto-fit,minmax(3.5rem,1fr))] gap-x-3 gap-y-1">
+                  {chunkHexId(message).map((group, i) => (
+                    <span key={i} className={i % 2 === 0 ? 'font-bold' : 'font-normal'}>
+                      {group}
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                message
+              )}
+            </div>
           </div>
-          <div className="flex items-start gap-2">
-            <div className="font-mono break-all text-[var(--wui-color-danger-text)] flex-1">{message}</div>
+          <div className="absolute top-3 right-3 flex flex-col gap-2">
+            <button
+              type="button"
+              onClick={() => setChunkTxId((c) => !c)}
+              className={`p-1 rounded-md hover:text-[var(--wui-color-text)] hover:bg-[var(--wui-color-bg-tertiary)] transition-colors ${chunkTxId ? 'bg-[var(--wui-color-bg-tertiary)] text-[var(--wui-color-primary)]' : 'text-[var(--wui-color-text-secondary)]'}`}
+              aria-label={chunkTxId ? 'Show as one line' : 'Show in chunks'}
+              aria-pressed={chunkTxId}
+            >
+              <Eye size={14} />
+            </button>
             <button
               type="button"
               onClick={copyMessage}
-              className="shrink-0 p-1 rounded-md text-[var(--wui-color-text-secondary)] hover:text-[var(--wui-color-text)] hover:bg-[var(--wui-color-bg-tertiary)] transition-colors mt-0.5"
+              className="p-1 rounded-md text-[var(--wui-color-text-secondary)] hover:text-[var(--wui-color-text)] hover:bg-[var(--wui-color-bg-tertiary)] transition-colors"
               aria-label="Copy transaction ID"
             >
               {copied ? <Check size={14} className="text-green-500" /> : <Clipboard size={14} />}
             </button>
           </div>
+          </div>
         </div>
-      </div>
 
       {/* Footer */}
       {!verifyDisplayMode && (
