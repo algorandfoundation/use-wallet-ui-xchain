@@ -1,5 +1,5 @@
 import type { Meta, StoryObj, Decorator } from '@storybook/react'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { TransactionReview } from '../components/TransactionReview'
 import * as mocks from './mocks'
 
@@ -224,18 +224,31 @@ export const Restored: Story = {
 }
 
 // --- Wallet in-app browser: verify-blocked state (swap case) ---
-const REAL_UA = typeof navigator !== 'undefined' ? navigator.userAgent : ''
 const METAMASK_IN_APP_UA =
   'Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 WebView MetaMaskMobile'
 
-function setUserAgent(ua: string) {
-  Object.defineProperty(navigator, 'userAgent', { value: ua, configurable: true })
+function setUserAgent(ua: string): boolean {
+  try {
+    Object.defineProperty(navigator, 'userAgent', { value: ua, configurable: true })
+    return true
+  } catch {
+    return false
+  }
 }
 
 const withWalletEmbeddedBrowser: Decorator = (Story) => {
-  setUserAgent(METAMASK_IN_APP_UA)
-  useEffect(() => () => setUserAgent(REAL_UA), [])
-  return <Story />
+  const [ready, setReady] = useState(false)
+
+  useEffect(() => {
+    const realUserAgent = navigator.userAgent
+    const applied = setUserAgent(METAMASK_IN_APP_UA)
+    setReady(true)
+    return () => {
+      if (applied) setUserAgent(realUserAgent)
+    }
+  }, [])
+
+  return ready ? <Story /> : <></>
 }
 
 export const SwapVerifyBlocked: Story = {

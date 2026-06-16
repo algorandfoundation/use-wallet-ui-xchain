@@ -56,9 +56,11 @@ export function buildVerifyUrl(txnBytes: Uint8Array[]): string {
 }
 
 /**
- * Add the `?return=1` hint to a verify URL, telling the portal it was reached by
+ * Add the `return=1` hint to a verify URL, telling the portal it was reached by
  * an in-place navigation and should show a "Back" button.
  */
 export function withReturnHint(verifyUrl: string): string {
-  return verifyUrl.replace('#', '?return=1#')
+  const url = new URL(verifyUrl)
+  url.searchParams.set('return', '1')
+  return url.toString()
 }
