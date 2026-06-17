@@ -10,6 +10,12 @@ const config: StorybookConfig = {
   viteFinal(config) {
     config.plugins = config.plugins || []
     config.plugins.push(tailwindcss())
+    config.build = { ...config.build, target: 'esnext' }
+    config.optimizeDeps = {
+      ...config.optimizeDeps,
+      esbuildOptions: { ...config.optimizeDeps?.esbuildOptions, target: 'esnext' },
+    }
+
     return config
   },
 }
