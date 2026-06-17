@@ -304,11 +304,23 @@ interface WalletUIProviderProps {
    * prop is also passed, it takes precedence.
    */
   swapRouter?: SwapRouterLike
-  /** 
+  /**
    * When `true` (default), shows a Verify button on transaction review dialogs
-   * that opens the portal verification page for independent sign-payload confirmation. 
+   * that opens the portal verification page for independent sign-payload confirmation.
    */
   verify?: boolean
+  /**
+   * Only applies when `verify` is on.
+   * 
+   * In wallet built-in browsers, the Verify navigation reloads the page and loses the
+   * pending sign request. When `true` (default), the request is saved to `localStorage`
+   * so the provider can restore it — and submit it — once the user returns. 
+   *
+   * When `false`, Verify stays available everywhere except wallet built-in browsers.
+   * For example, the dApp owns its own multi-step submission and doesn't want the
+   * provider submitting on its behalf. 
+   */
+  verifyRestore?: boolean
 }
 
 // Default query client configuration for NFD queries
@@ -484,6 +496,7 @@ export function WalletUIProvider({
   swap,
   swapRouter,
   verify = true,
+  verifyRestore = true,
 }: WalletUIProviderProps) {
   // Auto-wire swap options from `swapRouter` + wallet signer. Stabilise
   // `signTransactions` via a ref so the built config is stable across renders
@@ -557,6 +570,9 @@ export function WalletUIProvider({
   const [pendingSign, setPendingSign] = useState<PendingSignRequest | null>(null)
   const [showSignDialog, setShowSignDialog] = useState(false)
   const [signing, setSigning] = useState(false)
+  // Provider owns submission in the restored-sign path, so it must surface
+  // failures itself; the normal path leaves error display to the calling dApp.
+  const [restoredSignError, setRestoredSignError] = useState<string | null>(null)
 
   // Listen for extension sign responses
   useEffect(() => {
@@ -590,6 +606,9 @@ export function WalletUIProvider({
   const skipBeforeSignRef = useRef(false)
   // Raw txn bytes for a sign request restored from localStorage, used by triggerRestoredSign.
   const restoredTxnsRef = useRef<Uint8Array[] | null>(null)
+  // The verify persist/restore machinery is only active when the dApp opts into `verify` AND
+  // hasn't opted out via `verifyRestore`. Note `verify`/`verifyRestore` are static config.
+  const restoreEnabled = verify && verifyRestore
 
   const requestBeforeSign = useCallback((txnGroup: algosdk.Transaction[] | Uint8Array[], indexesToSign?: number[]) => {
     return new Promise<void>((resolve, reject) => {
@@ -605,8 +624,11 @@ export function WalletUIProvider({
       const txnBytes = transactions.map((txn) => txn.toByte())
       const verifyUrl = verify ? buildVerifyUrl(txnBytes) : undefined
 
-      // Only full-group signs are restorable
-      const restorable = !indexesToSign || txnBytes.every((_, i) => indexesToSign.includes(i))
+      // Can these txns survive embedded browser reload and be restored? 
+      // The verify restore feature must be on and only full-group signs qualify. 
+      const restorable = restoreEnabled && (!indexesToSign || txnBytes.every((_, i) => indexesToSign.includes(i)))
+
+      setRestoredSignError(null)
 
       const wrappedResolve = () => {
         setSigning(true)
@@ -616,7 +638,7 @@ export function WalletUIProvider({
       setPendingSign({ transactions: decodedTransactions, message, dangerous, genesisHash, genesisID, verifyUrl, restorable, resolve: wrappedResolve, reject })
       setShowSignDialog(true)
 
-      // Persist so the request can be restored on embedded browser reloads - in particular, for the verify flow.
+      // Persist unsigned txns IF wallets built-in browser AND the request is restorable.
       if (isWalletInAppBrowser() && restorable) {
         try {
           const persisted: PersistedSignRequest = {
@@ -731,16 +753,18 @@ export function WalletUIProvider({
   }, [manager, effectiveRainbowkit, wagmiConfig, rainbowkit])
 
   /**
-   * Resumes a sign request restored from localStorage.
-   * The restore effect already showed the review dialog, so this calls
-   * `signTransactions` with the before-sign dialog temporarily bypassed,
-   * then submits the signed transactions.
+   * Resumes a sign request restored from localStorage after a wallet built-in browser
+   * reload. The restore effect already re-showed the before-sign dialog, so this calls
+   * `signTransactions` with the before-sign dialog temporarily bypassed. Then, unlike
+   * the normal tx flow, it submits directly, since the reload destroyed the dApp's submit
+   * continuation.
    */
   const triggerRestoredSign = useCallback(async () => {
     const txns = restoredTxnsRef.current
     if (!txns) return
 
     try {
+      setRestoredSignError(null)
       skipBeforeSignRef.current = true
       let signedTxns: (Uint8Array | null)[]
 
@@ -769,6 +793,8 @@ export function WalletUIProvider({
     } catch (err) {
       skipBeforeSignRef.current = false
       setSigning(false)
+      // Leave the dialog open so the user can retry; surface why it failed.
+      setRestoredSignError(err instanceof Error ? err.message : 'Failed to submit the transaction. Please try again.')
       console.error('[WalletUI] Failed to complete restored signing request:', err)
     }
   }, [])
@@ -776,6 +802,11 @@ export function WalletUIProvider({
   // ----- Restore effect ------
   // Restore any valid pending sign request left by an in-app browser navigation on reload.
   useEffect(() => {
+    if (!restoreEnabled) {
+      clearPersistedSign()
+      return
+    }
+
     try {
       const stored = localStorage.getItem(PENDING_SIGN_KEY)
       if (!stored) return
@@ -863,6 +894,7 @@ export function WalletUIProvider({
   }, [pendingSign])
 
   const handleRejectSign = useCallback(() => {
+    setRestoredSignError(null)
     clearPersistedSign()
     if (extensionDetected && pendingRequestIdRef.current) {
       window.postMessage(
@@ -920,7 +952,7 @@ export function WalletUIProvider({
               <ExtensionSignIndicator transactionCount={pendingSign!.transactions.length} dangerous={pendingSign!.dangerous} onReject={handleRejectSign} />
             )}
             {showSignDialog && !extensionDetected && (
-              <BeforeSignDialog transactions={pendingSign!.transactions} message={pendingSign!.message} dangerous={pendingSign!.dangerous} genesisHash={pendingSign!.genesisHash} genesisID={pendingSign!.genesisID} onApprove={handleApproveSign} onReject={handleRejectSign} signing={signing} walletName={(activeWallet?.activeAccount?.metadata?.connectorName as string | undefined) ?? activeWallet?.metadata?.name} walletIcon={(activeWallet?.activeAccount?.metadata?.connectorIcon as string | undefined) ?? activeWallet?.metadata?.icon} algodClient={algodClient} network={activeNetwork} verifyUrl={pendingSign!.verifyUrl} restored={pendingSign!.restored} restorable={pendingSign!.restorable} />
+              <BeforeSignDialog transactions={pendingSign!.transactions} message={pendingSign!.message} dangerous={pendingSign!.dangerous} genesisHash={pendingSign!.genesisHash} genesisID={pendingSign!.genesisID} onApprove={handleApproveSign} onReject={handleRejectSign} signing={signing} walletName={(activeWallet?.activeAccount?.metadata?.connectorName as string | undefined) ?? activeWallet?.metadata?.name} walletIcon={(activeWallet?.activeAccount?.metadata?.connectorIcon as string | undefined) ?? activeWallet?.metadata?.icon} algodClient={algodClient} network={activeNetwork} verifyUrl={pendingSign!.verifyUrl} restored={pendingSign!.restored} restorable={pendingSign!.restorable} error={restoredSignError ?? undefined} />
             )}
             {pendingWelcome && (
               <WelcomeDialog algorandAddress={pendingWelcome.algorandAddress} evmAddress={pendingWelcome.evmAddress} onDismiss={() => setPendingWelcome(null)} />
