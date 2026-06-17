@@ -251,7 +251,7 @@ const withWalletEmbeddedBrowser: Decorator = (Story) => {
   return ready ? <Story /> : <></>
 }
 
-export const SwapVerifyBlocked: Story = {
+export const VerifyBlocked: Story = {
   decorators: [withWalletEmbeddedBrowser],
   args: {
     transactions: mocks.groupOfTwoPayments(),

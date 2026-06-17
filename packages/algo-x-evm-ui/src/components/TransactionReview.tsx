@@ -403,8 +403,7 @@ export function TransactionReview({
             </div>
             {verifyBlocked && (
               <div className="mt-1 rounded-xl border border-[var(--wui-color-danger-text)] bg-[var(--wui-color-danger-bg)] p-3 text-xs font-medium text-[var(--wui-color-danger-text)]">
-                Verify is not available for this type of browser and transaction. Perform this operation either in desktop (recommended)
-                or regular mobile browser to verify.
+                Verify isn't available for this transaction in your current browser. To verify, open this app on desktop (recommended) or in a regular mobile browser.
               </div>
             )}
           </div>
