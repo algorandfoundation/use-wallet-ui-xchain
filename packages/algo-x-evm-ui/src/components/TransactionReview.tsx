@@ -1,11 +1,13 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { TransactionFlow } from './TransactionFlow'
 import { TransactionDetail } from './TransactionDetail'
-import { ChevronRight, ArrowUpRight, Clipboard, Check } from './icons'
+import { ChevronRight, ArrowUpRight, Clipboard, Check, Eye } from './icons'
 import { Spinner } from './Spinner'
 import { useTransactionData } from '../hooks/useTransactionData'
 import type { TransactionData, TransactionDanger, AssetLookupClient } from '../types'
 import { DOCS_PORTAL_URL } from '../constants'
+import { isWalletInAppBrowser } from '../utils/browserEnv'
+import { withReturnHint } from '../utils/verifyTransport'
 
 /** Well-known Algorand network genesis hashes (base64-encoded). */
 const GENESIS_HASH_NETWORK: Record<string, string> = {
@@ -32,6 +34,14 @@ function resolveNetworkName(genesisHash: string | null | undefined, genesisID: s
   return null
 }
 
+/**
+ * Split a hex id into 4-char groups for chunked display. Strips an optional `0x` prefix. 
+ */
+function chunkHexId(value: string): string[] {
+  const hex = value.startsWith('0x') ? value.slice(2) : value
+  return hex.match(/.{1,4}/g) ?? []
+}
+
 export interface TransactionReviewProps {
   transactions: TransactionData[]
   message: string
@@ -40,8 +50,6 @@ export interface TransactionReviewProps {
   getApplicationAddress?: (appId: number) => { toString(): string }
   onApprove: () => void
   onReject: () => void
-  /** Verify handler - when provided, renders the Verify button in the footer. */
-  onVerify?: () => void
   signing?: boolean
   walletName?: string
   walletIcon?: string
@@ -55,6 +63,12 @@ export interface TransactionReviewProps {
   genesisID?: string | null
   /** Read-only mode to display on verify view - suppresses the action footer and more. */
   verifyDisplayMode?: boolean
+  /** When provided, renders a Verify button in the footer. */
+  verifyUrl?: string
+  /** When true, shows a notice that this request was restored after a page reload. */
+  restored?: boolean
+  /** False for partial signs (e.g. swap) that can't be persisted/restored.  */
+  restorable?: boolean
 }
 
 export function TransactionReview({
@@ -74,8 +88,10 @@ export function TransactionReview({
   network,
   genesisHash,
   genesisID,
-  onVerify,
   verifyDisplayMode,
+  verifyUrl,
+  restored,
+  restorable,
 }: TransactionReviewProps) {
   const { loading, assets, appEscrows } = useTransactionData(transactions, {
     algodClient,
@@ -86,6 +102,10 @@ export function TransactionReview({
   /** Index into transactions array for detail view, or null for list view */
   const [detailIndex, setDetailIndex] = useState<number | null>(null)
   const [copied, setCopied] = useState(false)
+  const [chunkTxId, setChunkTxId] = useState(false)
+
+  const embeddedBrowser = isWalletInAppBrowser()
+  const verifyBlocked = embeddedBrowser && restorable === false
 
   async function copyMessage() {
     try {
@@ -93,6 +113,19 @@ export function TransactionReview({
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     } catch {}
+  }
+
+  function openVerifyUrl() {
+    if (!verifyUrl) return
+    if (embeddedBrowser) {
+      // Wallet in-app browsers are single-tab webviews, so navigate deliberately with the hint. 
+      // The portal shows a "Back to app" button; returning resumes from the persisted-sign restore.
+      window.location.assign(withReturnHint(verifyUrl))
+    } else {
+      // Desktop and regular mobile: a real new tab keeps the app tab (and its pending sign
+      // promise) alive while the user reviews on the portal. 
+      window.open(verifyUrl, '_blank', 'noopener')
+    }
   }
 
   // Animate on mount and when returning from detail view
@@ -195,6 +228,11 @@ export function TransactionReview({
 
       {/* Signing / verifying description */}
       <div className="px-6 pb-3 text-sm text-[var(--wui-color-text-secondary)]">
+        {restored && (
+          <div className="mb-2 mt-0.5 text-xs text-[var(--wui-color-text)]">
+            Still pending - review and sign, or reject to discard.
+          </div>
+        )}
         {unknownNetwork && (
           <div className="font-bold text-[var(--wui-color-danger-text)] mb-1">Warning — unknown network genesis hash</div>
         )}
@@ -268,8 +306,8 @@ export function TransactionReview({
 
       {/* Sign payload */}
       <div className="px-4 pb-4">
-        <div className="text-sm flex flex-col gap-2 border border-[var(--wui-color-border)] rounded-xl p-3">
-          <div className="flex items-center gap-2">
+        <div className="relative text-sm flex items-center gap-2 border border-[var(--wui-color-border)] rounded-xl p-3">
+          <div className="flex-1 min-w-0 flex flex-col gap-2 pr-7">
             <span>
               {verifyDisplayMode
                 ? transactions.length > 1
@@ -277,20 +315,41 @@ export function TransactionReview({
                   : 'Resulting transaction ID:'
                 : `Ensure ${walletName ?? 'your wallet'} shows this transaction ID:`}
             </span>
+            <div className="font-mono break-all text-[var(--wui-color-danger-text)] select-all">
+              {chunkTxId ? (
+                <div className="grid grid-cols-[repeat(auto-fit,minmax(3.5rem,1fr))] gap-x-3 gap-y-1">
+                  {chunkHexId(message).map((group, i) => (
+                    <span key={i} className={i % 2 === 0 ? 'font-bold' : 'font-normal'}>
+                      {group}
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                message
+              )}
+            </div>
           </div>
-          <div className="flex items-start gap-2">
-            <div className="font-mono break-all text-[var(--wui-color-danger-text)] flex-1">{message}</div>
+          <div className="absolute top-3 right-3 flex flex-col gap-2">
+            <button
+              type="button"
+              onClick={() => setChunkTxId((c) => !c)}
+              className={`p-1 rounded-md hover:text-[var(--wui-color-text)] hover:bg-[var(--wui-color-bg-tertiary)] transition-colors ${chunkTxId ? 'bg-[var(--wui-color-bg-tertiary)] text-[var(--wui-color-primary)]' : 'text-[var(--wui-color-text-secondary)]'}`}
+              aria-label={chunkTxId ? 'Show as one line' : 'Show in chunks'}
+              aria-pressed={chunkTxId}
+            >
+              <Eye size={14} />
+            </button>
             <button
               type="button"
               onClick={copyMessage}
-              className="shrink-0 p-1 rounded-md text-[var(--wui-color-text-secondary)] hover:text-[var(--wui-color-text)] hover:bg-[var(--wui-color-bg-tertiary)] transition-colors mt-0.5"
+              className="p-1 rounded-md text-[var(--wui-color-text-secondary)] hover:text-[var(--wui-color-text)] hover:bg-[var(--wui-color-bg-tertiary)] transition-colors"
               aria-label="Copy transaction ID"
             >
               {copied ? <Check size={14} className="text-green-500" /> : <Clipboard size={14} />}
             </button>
           </div>
+          </div>
         </div>
-      </div>
 
       {/* Footer */}
       {!verifyDisplayMode && (
@@ -301,44 +360,52 @@ export function TransactionReview({
               Review in {walletName || 'wallet'}
               {walletIcon && <img src={walletIcon} alt="" aria-hidden="true" className="h-4 w-4 rounded-sm flex-shrink-0" />}
             </div>
-            {onVerify && (
+            {verifyUrl && !embeddedBrowser && (
               <button
                 type="button"
-                onClick={onVerify}
-                className="w-full py-2.5 px-4 bg-[var(--wui-color-verify)] text-[var(--wui-color-verify-text)] font-medium rounded-xl hover:brightness-90 transition-all text-sm"
+                onClick={openVerifyUrl}
+                className="w-full py-2.5 px-4 bg-[var(--wui-color-verify)] text-[var(--wui-color-verify-text)] font-medium rounded-xl hover:brightness-90 transition-all text-sm flex items-center justify-center gap-1.5"
               >
                 Verify
               </button>
             )}
           </div>
         ) : (
-          <div className="px-6 py-4 border-t border-[var(--wui-color-border)] flex gap-3">
-            <button
-              onClick={onReject}
-              className="flex-1 py-2.5 px-4 bg-[var(--wui-color-bg-tertiary)] text-[var(--wui-color-text-secondary)] font-medium rounded-xl hover:brightness-90 transition-all text-sm"
-            >
-              Reject
-            </button>
-            {onVerify && (
+          <div className="px-6 py-4 border-t border-[var(--wui-color-border)] flex flex-col gap-2">
+            <div className="flex gap-3">
               <button
-                type="button"
-                onClick={onVerify}
-                className="flex-1 py-2.5 px-4 bg-[var(--wui-color-verify)] text-[var(--wui-color-verify-text)] font-medium rounded-xl hover:brightness-90 transition-all text-sm"
+                onClick={onReject}
+                className="flex-1 py-2.5 px-4 bg-[var(--wui-color-bg-tertiary)] text-[var(--wui-color-text-secondary)] font-medium rounded-xl hover:brightness-90 transition-all text-sm"
               >
-                Verify
+                Reject
               </button>
+              {verifyUrl && (
+                <button
+                  type="button"
+                  disabled={verifyBlocked}
+                  onClick={openVerifyUrl}
+                  className={`flex-1 py-2.5 px-4 bg-[var(--wui-color-verify)] text-[var(--wui-color-verify-text)] font-medium rounded-xl transition-all text-sm flex items-center justify-center gap-1.5 ${verifyBlocked ? 'opacity-50 cursor-not-allowed' : 'hover:brightness-90'}`}
+                >
+                  Verify
+                </button>
+              )}
+              <button
+                onClick={onApprove}
+                className={`flex-1 py-2.5 px-4 font-medium rounded-xl hover:brightness-90 transition-all text-sm flex items-center justify-center gap-2 ${
+                  dangerous
+                    ? 'bg-[var(--wui-color-danger-text)] text-[var(--wui-color-danger-button-text)]'
+                    : 'bg-[var(--wui-color-primary)] text-[var(--wui-color-primary-text)]'
+                }`}
+              >
+                {walletIcon && <img src={walletIcon} alt="" aria-hidden="true" className="h-4 w-4 rounded-sm flex-shrink-0" />}
+                Review
+              </button>
+            </div>
+            {verifyBlocked && (
+              <div className="mt-1 rounded-xl border border-[var(--wui-color-danger-text)] bg-[var(--wui-color-danger-bg)] p-3 text-xs font-medium text-[var(--wui-color-danger-text)]">
+                Verify isn't available for this transaction in your current browser. To verify, open this app on desktop (recommended) or in a regular mobile browser.
+              </div>
             )}
-            <button
-              onClick={onApprove}
-              className={`flex-1 py-2.5 px-4 font-medium rounded-xl hover:brightness-90 transition-all text-sm flex items-center justify-center gap-2 ${
-                dangerous
-                  ? 'bg-[var(--wui-color-danger-text)] text-[var(--wui-color-danger-button-text)]'
-                  : 'bg-[var(--wui-color-primary)] text-[var(--wui-color-primary-text)]'
-              }`}
-            >
-              {walletIcon && <img src={walletIcon} alt="" aria-hidden="true" className="h-4 w-4 rounded-sm flex-shrink-0" />}
-              Review
-            </button>
           </div>
         )
       )}

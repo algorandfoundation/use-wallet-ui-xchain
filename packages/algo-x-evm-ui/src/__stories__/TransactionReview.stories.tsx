@@ -1,4 +1,5 @@
-import type { Meta, StoryObj } from '@storybook/react'
+import type { Meta, StoryObj, Decorator } from '@storybook/react'
+import { useEffect, useState } from 'react'
 import { TransactionReview } from '../components/TransactionReview'
 import * as mocks from './mocks'
 
@@ -21,7 +22,7 @@ const meta: Meta<typeof TransactionReview> = {
     walletIcon: SAMPLE_WALLET_ICON,
     onApprove: () => console.log('approved'),
     onReject: () => console.log('rejected'),
-    onVerify: () => console.log('verify clicked'),
+    verifyUrl: 'https://example.com/verify#sample',
   },
 }
 
@@ -143,7 +144,7 @@ export const Signing: Story = {
     signing: true,
     walletName: 'Pera Wallet',
     genesisHash: TESTNET_GENESIS_HASH,
-    onVerify: () => console.log('verify clicked'),
+    verifyUrl: 'https://example.com/verify#sample',
   },
 }
 
@@ -194,12 +195,12 @@ export const UnknownNetwork: Story = {
   },
 }
 
-// When WalletUIProvider prop `verify={false}`: no `onVerify`, so the footer omits the Verify button entirely.
+// When WalletUIProvider prop `verify={false}`: no `verifyUrl`, so the footer omits the Verify button entirely.
 export const NoVerifyButton: Story = {
   args: {
     transactions: mocks.singlePayment(),
     genesisHash: TESTNET_GENESIS_HASH,
-    onVerify: undefined,
+    verifyUrl: undefined,
   },
 }
 
@@ -209,7 +210,53 @@ export const SigningWithoutVerify: Story = {
     signing: true,
     walletName: 'Pera Wallet',
     genesisHash: TESTNET_GENESIS_HASH,
-    onVerify: undefined,
+    verifyUrl: undefined,
   },
 }
 
+export const Restored: Story = {
+  args: {
+    transactions: mocks.singlePayment(),
+    genesisHash: TESTNET_GENESIS_HASH,
+    verifyUrl: 'https://example.com/verify#sample',
+    restored: true,
+  },
+}
+
+// --- Wallet in-app browser: verify-blocked state (swap case) ---
+const METAMASK_IN_APP_UA =
+  'Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 WebView MetaMaskMobile'
+
+function setUserAgent(ua: string): boolean {
+  try {
+    Object.defineProperty(navigator, 'userAgent', { value: ua, configurable: true })
+    return true
+  } catch {
+    return false
+  }
+}
+
+const withWalletEmbeddedBrowser: Decorator = (Story) => {
+  const [ready, setReady] = useState(false)
+
+  useEffect(() => {
+    const realUserAgent = navigator.userAgent
+    const applied = setUserAgent(METAMASK_IN_APP_UA)
+    setReady(true)
+    return () => {
+      if (applied) setUserAgent(realUserAgent)
+    }
+  }, [])
+
+  return ready ? <Story /> : <></>
+}
+
+export const VerifyBlocked: Story = {
+  decorators: [withWalletEmbeddedBrowser],
+  args: {
+    transactions: mocks.groupOfTwoPayments(),
+    genesisHash: TESTNET_GENESIS_HASH,
+    verifyUrl: 'https://example.com/verify#sample',
+    restorable: false,
+  },
+}

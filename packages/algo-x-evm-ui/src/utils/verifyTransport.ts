@@ -54,3 +54,13 @@ export function decodeTxnGroup(payload: string): Uint8Array[] {
 export function buildVerifyUrl(txnBytes: Uint8Array[]): string {
   return `${VERIFY_PORTAL_URL}#${encodeTxnGroup(txnBytes)}`
 }
+
+/**
+ * Add the `return=1` hint to a verify URL, telling the portal it was reached by
+ * an in-place navigation and should show a "Back" button.
+ */
+export function withReturnHint(verifyUrl: string): string {
+  const url = new URL(verifyUrl)
+  url.searchParams.set('return', '1')
+  return url.toString()
+}

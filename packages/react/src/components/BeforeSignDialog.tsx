@@ -28,10 +28,13 @@ interface BeforeSignDialogProps {
   walletIcon?: string
   algodClient?: AssetLookupClient
   network?: string
-  onVerify?: () => void
+  verifyUrl?: string
+  restored?: boolean
+  restorable?: boolean
+  error?: string
 }
 
-export function BeforeSignDialog({ transactions, message, dangerous, genesisHash, genesisID, onApprove, onReject, signing, walletName, walletIcon, algodClient, network, onVerify }: BeforeSignDialogProps) {
+export function BeforeSignDialog({ transactions, message, dangerous, genesisHash, genesisID, onApprove, onReject, signing, walletName, walletIcon, algodClient, network, verifyUrl, restored, restorable, error }: BeforeSignDialogProps) {
   const { theme } = useWalletUI()
   const [animationState, setAnimationState] = useState<'starting' | 'entered' | 'exiting' | null>('starting')
 
@@ -119,8 +122,13 @@ export function BeforeSignDialog({ transactions, message, dangerous, genesisHash
                   walletName={walletName}
                   walletIcon={walletIcon}
                   headerAction={closeButton}
-                  onVerify={onVerify}
+                  verifyUrl={verifyUrl}
+                  restored={restored}
+                  restorable={restorable}
                 />
+                {error && (
+                  <p className="-mt-1 text-sm text-[var(--wui-color-danger-text)] break-words">{error}</p>
+                )}
               </InfoDialog>
             </div>
           </FloatingFocusManager>

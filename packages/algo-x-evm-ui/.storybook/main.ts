@@ -3,7 +3,6 @@ import tailwindcss from '@tailwindcss/vite'
 
 const config: StorybookConfig = {
   stories: ['../src/**/*.stories.@(ts|tsx)'],
-  addons: ['@storybook/addon-essentials'],
   framework: {
     name: '@storybook/react-vite',
     options: {},
@@ -11,6 +10,12 @@ const config: StorybookConfig = {
   viteFinal(config) {
     config.plugins = config.plugins || []
     config.plugins.push(tailwindcss())
+    config.build = { ...config.build, target: 'esnext' }
+    config.optimizeDeps = {
+      ...config.optimizeDeps,
+      esbuildOptions: { ...config.optimizeDeps?.esbuildOptions, target: 'esnext' },
+    }
+
     return config
   },
 }
